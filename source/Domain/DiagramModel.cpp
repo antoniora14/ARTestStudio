@@ -1,4 +1,4 @@
-#include "DiagramModel.h"
+﻿#include "DiagramModel.h"
 
 #include <algorithm>
 #include <limits>
@@ -69,10 +69,7 @@ namespace arteststudio::domain
 		return DiagramError::None;
 	}
 
-	AddConnectionResult DiagramModel::AddConnection(
-		ConnectionEndpoint from,
-		ConnectionEndpoint to,
-		std::vector<Point> intermediatePoints)
+	AddConnectionResult DiagramModel::AddConnection(ConnectionEndpoint from, ConnectionEndpoint to, std::vector<Point> intermediatePoints)
 	{
 		if (FindNode(from.nodeId) == nullptr || FindNode(to.nodeId) == nullptr)
 		{

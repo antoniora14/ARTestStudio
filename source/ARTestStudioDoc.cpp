@@ -1,4 +1,4 @@
-
+﻿
 // ARTestStudioDoc.cpp : implementation of the CARTestStudioDoc class
 //
 

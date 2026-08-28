@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <compare>
 #include <cstddef>
@@ -133,10 +133,7 @@ namespace arteststudio::domain
 		[[nodiscard]] DiagramError MoveNodeTo(NodeId nodeId, Point position) noexcept;
 		[[nodiscard]] DiagramError RemoveNode(NodeId nodeId) noexcept;
 
-		[[nodiscard]] AddConnectionResult AddConnection(
-			ConnectionEndpoint from,
-			ConnectionEndpoint to,
-			std::vector<Point> intermediatePoints = {});
+		[[nodiscard]] AddConnectionResult AddConnection(ConnectionEndpoint from, ConnectionEndpoint to, std::vector<Point> intermediatePoints = {});
 		[[nodiscard]] DiagramError RemoveConnection(ConnectionId connectionId) noexcept;
 
 		[[nodiscard]] Node* FindNode(NodeId nodeId) noexcept;
