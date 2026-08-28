@@ -35,6 +35,12 @@ El documento activo solo se reemplaza cuando todo el archivo es valido. Se
 rechazan versiones desconocidas, identificadores duplicados, conexiones a bloques
 inexistentes, puertos invalidos, dimensiones fuera de rango y archivos truncados.
 
+`DiagramSnapshot` es el contrato para reconstruir el agregado completo. Conserva
+los `NodeId` y `ConnectionId` originales, valida todas las referencias antes de
+modificar el modelo y calcula los siguientes identificadores a partir del maximo
+restaurado. Esto permite que configuraciones y proyectos futuros mantengan
+referencias estables incluso cuando existen huecos por elementos eliminados.
+
 El guardado tambien es transaccional: se genera y escribe un archivo temporal en
 el mismo directorio y Windows reemplaza el destino al completar correctamente la
 escritura. Un fallo no debe dejar un documento parcialmente escrito.

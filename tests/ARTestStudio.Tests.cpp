@@ -13,6 +13,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace
@@ -351,6 +352,131 @@ namespace
 			"The route points must be restored.");
 	}
 
+	void PreservesIdentifiersWithGaps()
+	{
+		DiagramModel original;
+		const NodeId first = original.AddNode(NodeKind::Rectangle, {0, 0}, L"First");
+		const NodeId removed = original.AddNode(NodeKind::Rectangle, {200, 0}, L"Removed");
+		const NodeId third = original.AddNode(NodeKind::Diamond, {400, 0}, L"Third");
+		const AddConnectionResult removedConnection = original.AddConnection(
+			{first, PortId::Right}, {removed, PortId::Left});
+		const AddConnectionResult survivingConnection = original.AddConnection(
+			{first, PortId::Right}, {third, PortId::Left});
+		Require(static_cast<bool>(removedConnection) && static_cast<bool>(survivingConnection),
+			"Both initial connections must be created.");
+		Require(original.RemoveNode(removed) == DiagramError::None,
+			"Removing the middle node must create an identifier gap.");
+
+		TemporaryDiagramFile file;
+		const TextDiagramStorage storage;
+		Require(static_cast<bool>(storage.Save(file.Path(), original)),
+			"A diagram with identifier gaps must be saved.");
+
+		DiagramModel restored;
+		Require(static_cast<bool>(storage.Load(file.Path(), restored)),
+			"A diagram with identifier gaps must be loaded.");
+		Require(restored.FindNode(first) != nullptr && restored.FindNode(third) != nullptr,
+			"Existing node identifiers must be preserved exactly.");
+		Require(restored.FindNode(removed) == nullptr,
+			"A removed node identifier must remain unused after loading.");
+		Require(restored.FindConnection(removedConnection.connectionId) == nullptr,
+			"A removed connection identifier must remain unused after loading.");
+		Require(restored.FindConnection(survivingConnection.connectionId) != nullptr,
+			"The surviving connection identifier must be preserved exactly.");
+
+		const NodeId addedNode = restored.AddNode(NodeKind::Rectangle, {600, 0}, L"Added after load");
+		Require(addedNode == NodeId{4}, "The next node identifier must continue after the maximum restored ID.");
+		const AddConnectionResult addedConnection = restored.AddConnection(
+			{third, PortId::Right}, {addedNode, PortId::Left});
+		Require(addedConnection.connectionId == ConnectionId{3},
+			"The next connection identifier must continue after the maximum restored ID.");
+	}
+
+	void LoadsExistingVersionOneDocumentsWithStableIdentifiers()
+	{
+		TemporaryDiagramFile file;
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output << "ARTESTSTUDIO_DIAGRAM 1\n"
+				<< "NODES 2\n"
+				<< "NODE 42 0 10 20 150 100 \"High identifier\"\n"
+				<< "NODE 7 1 400 200 100 80 \"Low identifier\"\n"
+				<< "CONNECTIONS 1\n"
+				<< "CONNECTION 77 42 1 7 3 1 250 70\n"
+				<< "END\n";
+		}
+
+		DiagramModel diagram;
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Load(file.Path(), diagram);
+		Require(static_cast<bool>(result), "An existing version-one document must remain loadable.");
+		Require(diagram.FindNode(NodeId{42}) != nullptr && diagram.FindNode(NodeId{7}) != nullptr,
+			"Version-one node identifiers must be preserved regardless of file order.");
+		Require(diagram.FindConnection(ConnectionId{77}) != nullptr,
+			"Version-one connection identifiers must be preserved.");
+		Require(diagram.AddNode(NodeKind::Rectangle, {700, 0}, L"Next") == NodeId{43},
+			"The next node identifier must use the restored maximum, not the last file entry.");
+		const AddConnectionResult added = diagram.AddConnection(
+			{NodeId{7}, PortId::Right}, {NodeId{43}, PortId::Left});
+		Require(added.connectionId == ConnectionId{78},
+			"The next connection identifier must continue after a version-one restored maximum.");
+	}
+
+	void RejectsDuplicateNodeIdentifiersAtomically()
+	{
+		DiagramModel diagram;
+		const NodeId existing = diagram.AddNode(NodeKind::Rectangle, {5, 5}, L"Existing");
+		DiagramSnapshot snapshot;
+		snapshot.nodes = {
+			{NodeId{7}, NodeKind::Rectangle, {0, 0}, 150, 100, L"First"},
+			{NodeId{7}, NodeKind::Diamond, {200, 0}, 100, 80, L"Duplicate"}};
+
+		const RestoreSnapshotResult result = diagram.RestoreSnapshot(std::move(snapshot));
+		Require(result.error == DiagramSnapshotError::DuplicateNodeId,
+			"Duplicate node identifiers must be rejected explicitly.");
+		Require(result.identifier == 7, "The duplicate identifier must be reported.");
+		Require(diagram.Nodes().size() == 1 && diagram.FindNode(existing) != nullptr,
+			"A rejected snapshot must not replace the active diagram.");
+	}
+
+	void RejectsDuplicateConnectionIdentifiersAtomically()
+	{
+		DiagramModel diagram;
+		const NodeId existing = diagram.AddNode(NodeKind::Rectangle, {5, 5}, L"Existing");
+		DiagramSnapshot snapshot;
+		snapshot.nodes = {
+			{NodeId{10}, NodeKind::Rectangle, {0, 0}, 150, 100, L"First"},
+			{NodeId{20}, NodeKind::Rectangle, {300, 0}, 150, 100, L"Second"}};
+		snapshot.connections = {
+			{ConnectionId{30}, {NodeId{10}, PortId::Right}, {NodeId{20}, PortId::Left}, {}},
+			{ConnectionId{30}, {NodeId{20}, PortId::Left}, {NodeId{10}, PortId::Right}, {}}};
+
+		const RestoreSnapshotResult result = diagram.RestoreSnapshot(std::move(snapshot));
+		Require(result.error == DiagramSnapshotError::DuplicateConnectionId,
+			"Duplicate connection identifiers must be rejected explicitly.");
+		Require(result.identifier == 30, "The duplicate connection identifier must be reported.");
+		Require(diagram.Nodes().size() == 1 && diagram.FindNode(existing) != nullptr,
+			"A rejected connection snapshot must preserve the active diagram.");
+	}
+
+	void RejectsDanglingSnapshotConnectionsAtomically()
+	{
+		DiagramModel diagram;
+		const NodeId existing = diagram.AddNode(NodeKind::Rectangle, {5, 5}, L"Existing");
+		DiagramSnapshot snapshot;
+		snapshot.nodes = {
+			{NodeId{10}, NodeKind::Rectangle, {0, 0}, 150, 100, L"Only node"}};
+		snapshot.connections = {
+			{ConnectionId{20}, {NodeId{10}, PortId::Right}, {NodeId{99}, PortId::Left}, {}}};
+
+		const RestoreSnapshotResult result = diagram.RestoreSnapshot(std::move(snapshot));
+		Require(result.error == DiagramSnapshotError::NodeNotFound,
+			"Connections to nodes outside the snapshot must be rejected.");
+		Require(result.identifier == 99, "The missing endpoint identifier must be reported.");
+		Require(diagram.Nodes().size() == 1 && diagram.FindNode(existing) != nullptr,
+			"A dangling snapshot must not partially replace the active diagram.");
+	}
+
 	void RejectsCorruptFilesWithoutChangingTheDiagram()
 	{
 		TemporaryDiagramFile file;
@@ -445,6 +571,11 @@ int main()
 		{"reroutes when an obstacle moves", ReroutesWhenAnObstacleMoves},
 		{"routes every port combination", RoutesEveryPortCombination},
 		{"persists and restores diagrams", PersistsAndRestoresDiagram},
+		{"preserves identifiers with gaps", PreservesIdentifiersWithGaps},
+		{"loads existing version-one documents with stable identifiers", LoadsExistingVersionOneDocumentsWithStableIdentifiers},
+		{"rejects duplicate node identifiers atomically", RejectsDuplicateNodeIdentifiersAtomically},
+		{"rejects duplicate connection identifiers atomically", RejectsDuplicateConnectionIdentifiersAtomically},
+		{"rejects dangling snapshot connections atomically", RejectsDanglingSnapshotConnectionsAtomically},
 		{"rejects corrupt files without changing the diagram", RejectsCorruptFilesWithoutChangingTheDiagram},
 		{"rejects connections to missing nodes", RejectsConnectionsToMissingNodes},
 		{"rejects unsupported file versions", RejectsUnsupportedFileVersions},

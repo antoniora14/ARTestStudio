@@ -12,8 +12,6 @@
 #include <locale>
 #include <sstream>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -25,12 +23,16 @@ namespace arteststudio::infrastructure
 		using application::StorageResult;
 		using application::kDiagramFileExtension;
 		using domain::Connection;
+		using domain::ConnectionId;
 		using domain::DiagramModel;
+		using domain::DiagramSnapshot;
+		using domain::DiagramSnapshotError;
 		using domain::Node;
 		using domain::NodeId;
 		using domain::NodeKind;
 		using domain::Point;
 		using domain::PortId;
+		using domain::RestoreSnapshotResult;
 
 		constexpr int kFormatVersion = 1;
 		constexpr std::uint64_t kMaximumNodes = 10000;
@@ -64,6 +66,57 @@ namespace arteststudio::infrastructure
 		{
 			const std::wstring extension = path.extension().native();
 			return _wcsicmp(extension.c_str(), kDiagramFileExtension.data()) == 0;
+		}
+
+		[[nodiscard]] std::wstring DescribeSnapshotFailure(const RestoreSnapshotResult& result)
+		{
+			std::wstring detail;
+			switch (result.error)
+			{
+			case DiagramSnapshotError::InvalidNodeId:
+				detail = L"El snapshot contiene un identificador de bloque invalido.";
+				break;
+			case DiagramSnapshotError::DuplicateNodeId:
+				detail = L"El snapshot contiene un identificador de bloque duplicado.";
+				break;
+			case DiagramSnapshotError::InvalidNodeKind:
+				detail = L"El snapshot contiene un tipo de bloque invalido.";
+				break;
+			case DiagramSnapshotError::InvalidNodeDimensions:
+				detail = L"El snapshot contiene dimensiones de bloque invalidas.";
+				break;
+			case DiagramSnapshotError::InvalidConnectionId:
+				detail = L"El snapshot contiene un identificador de conexion invalido.";
+				break;
+			case DiagramSnapshotError::DuplicateConnectionId:
+				detail = L"El snapshot contiene un identificador de conexion duplicado.";
+				break;
+			case DiagramSnapshotError::NodeNotFound:
+				detail = L"Una conexion del snapshot referencia un bloque inexistente.";
+				break;
+			case DiagramSnapshotError::InvalidPort:
+				detail = L"Una conexion del snapshot utiliza un puerto invalido.";
+				break;
+			case DiagramSnapshotError::IdentifierOverflow:
+				detail = L"Un identificador no permite generar el siguiente valor de forma segura.";
+				break;
+			case DiagramSnapshotError::AllocationFailure:
+				detail = L"No hay memoria suficiente para validar el snapshot.";
+				break;
+			case DiagramSnapshotError::UnexpectedFailure:
+				detail = L"Ocurrio un error inesperado al validar el snapshot.";
+				break;
+			case DiagramSnapshotError::None:
+				return {};
+			}
+
+			if (result.identifier != 0)
+			{
+				detail += L" Identificador: ";
+				detail += std::to_wstring(result.identifier);
+				detail += L".";
+			}
+			return detail;
 		}
 
 		[[nodiscard]] StorageResult ToUtf8(std::wstring_view value, std::string& output)
@@ -154,12 +207,19 @@ namespace arteststudio::infrastructure
 
 		[[nodiscard]] StorageResult SerializeDiagram(const DiagramModel& diagram, std::string& serialized)
 		{
+			const DiagramSnapshot snapshot = diagram.CaptureSnapshot();
+			const RestoreSnapshotResult validation = DiagramModel::ValidateSnapshot(snapshot);
+			if (!validation)
+			{
+				return Failure(StorageError::InvalidData, DescribeSnapshotFailure(validation));
+			}
+
 			std::ostringstream output;
 			output.imbue(std::locale::classic());
 			output << "ARTESTSTUDIO_DIAGRAM " << kFormatVersion << '\n';
-			output << "NODES " << diagram.Nodes().size() << '\n';
+			output << "NODES " << snapshot.nodes.size() << '\n';
 
-			for (const Node& node : diagram.Nodes())
+			for (const Node& node : snapshot.nodes)
 			{
 				if (!node.id || !IsCoordinateValid(node.position.x) || !IsCoordinateValid(node.position.y) ||
 					!IsDimensionValid(node.width) || !IsDimensionValid(node.height) ||
@@ -184,8 +244,8 @@ namespace arteststudio::infrastructure
 					<< node.width << ' ' << node.height << ' ' << std::quoted(label) << '\n';
 			}
 
-			output << "CONNECTIONS " << diagram.Connections().size() << '\n';
-			for (const Connection& connection : diagram.Connections())
+			output << "CONNECTIONS " << snapshot.connections.size() << '\n';
+			for (const Connection& connection : snapshot.connections)
 			{
 				if (!connection.id || !connection.from.nodeId || !connection.to.nodeId ||
 					!IsPortValid(static_cast<int>(connection.from.portId)) ||
@@ -241,9 +301,8 @@ namespace arteststudio::infrastructure
 				return Failure(StorageError::InvalidData, L"La seccion NODES es invalida.");
 			}
 
-			DiagramModel loaded;
-			std::unordered_map<std::uint64_t, NodeId> nodeIds;
-			nodeIds.reserve(static_cast<std::size_t>(nodeCount));
+			DiagramSnapshot snapshot;
+			snapshot.nodes.reserve(static_cast<std::size_t>(nodeCount));
 			for (std::uint64_t index = 0; index < nodeCount; ++index)
 			{
 				std::uint64_t storedId = 0;
@@ -254,13 +313,13 @@ namespace arteststudio::infrastructure
 				int height = 0;
 				std::string labelBytes;
 				if (!(input >> token >> storedId >> kind >> x >> y >> width >> height >> std::quoted(labelBytes)) ||
-					token != "NODE" || storedId == 0 ||
+					token != "NODE" ||
 					(kind != static_cast<int>(NodeKind::Rectangle) && kind != static_cast<int>(NodeKind::Diamond)) ||
 					!IsCoordinateValid(x) || !IsCoordinateValid(y) ||
 					!IsDimensionValid(width) || !IsDimensionValid(height) ||
-					labelBytes.size() > kMaximumLabelBytes || nodeIds.contains(storedId))
+					labelBytes.size() > kMaximumLabelBytes)
 				{
-					return Failure(StorageError::InvalidData, L"Se encontro un bloque invalido o duplicado.");
+					return Failure(StorageError::InvalidData, L"Se encontro un bloque invalido.");
 				}
 
 				std::wstring label;
@@ -270,8 +329,8 @@ namespace arteststudio::infrastructure
 					return conversion;
 				}
 
-				const NodeId newId = loaded.AddNode(static_cast<NodeKind>(kind), {x, y}, width, height, std::move(label));
-				nodeIds.emplace(storedId, newId);
+				snapshot.nodes.push_back(Node{
+					NodeId{storedId}, static_cast<NodeKind>(kind), {x, y}, width, height, std::move(label)});
 			}
 
 			std::uint64_t connectionCount = 0;
@@ -281,8 +340,7 @@ namespace arteststudio::infrastructure
 				return Failure(StorageError::InvalidData, L"La seccion CONNECTIONS es invalida.");
 			}
 
-			std::unordered_set<std::uint64_t> connectionIds;
-			connectionIds.reserve(static_cast<std::size_t>(connectionCount));
+			snapshot.connections.reserve(static_cast<std::size_t>(connectionCount));
 			for (std::uint64_t index = 0; index < connectionCount; ++index)
 			{
 				std::uint64_t storedId = 0;
@@ -292,11 +350,10 @@ namespace arteststudio::infrastructure
 				int toPort = 0;
 				std::uint64_t pointCount = 0;
 				if (!(input >> token >> storedId >> fromNodeId >> fromPort >> toNodeId >> toPort >> pointCount) ||
-					token != "CONNECTION" || storedId == 0 || connectionIds.contains(storedId) ||
-					!nodeIds.contains(fromNodeId) || !nodeIds.contains(toNodeId) ||
+					token != "CONNECTION" ||
 					!IsPortValid(fromPort) || !IsPortValid(toPort) || pointCount > kMaximumRoutePoints)
 				{
-					return Failure(StorageError::InvalidData, L"Se encontro una conexion invalida o duplicada.");
+					return Failure(StorageError::InvalidData, L"Se encontro una conexion invalida.");
 				}
 
 				std::vector<Point> points;
@@ -312,15 +369,11 @@ namespace arteststudio::infrastructure
 					points.push_back(point);
 				}
 
-				const domain::AddConnectionResult added = loaded.AddConnection(
-					{nodeIds.at(fromNodeId), static_cast<PortId>(fromPort)},
-					{nodeIds.at(toNodeId), static_cast<PortId>(toPort)},
-					std::move(points));
-				if (!added)
-				{
-					return Failure(StorageError::InvalidData, L"No se pudo reconstruir una conexion.");
-				}
-				connectionIds.insert(storedId);
+				snapshot.connections.push_back(Connection{
+					ConnectionId{storedId},
+					{NodeId{fromNodeId}, static_cast<PortId>(fromPort)},
+					{NodeId{toNodeId}, static_cast<PortId>(toPort)},
+					std::move(points)});
 			}
 
 			if (!(input >> token) || token != "END")
@@ -330,6 +383,13 @@ namespace arteststudio::infrastructure
 			if (input >> token)
 			{
 				return Failure(StorageError::InvalidData, L"El documento contiene datos inesperados despues de END.");
+			}
+
+			DiagramModel loaded;
+			const RestoreSnapshotResult restored = loaded.RestoreSnapshot(std::move(snapshot));
+			if (!restored)
+			{
+				return Failure(StorageError::InvalidData, DescribeSnapshotFailure(restored));
 			}
 
 			diagram = std::move(loaded);

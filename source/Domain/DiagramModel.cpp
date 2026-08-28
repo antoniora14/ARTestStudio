@@ -1,6 +1,9 @@
 #include "DiagramModel.h"
 
 #include <algorithm>
+#include <limits>
+#include <new>
+#include <unordered_set>
 #include <utility>
 
 namespace arteststudio::domain
@@ -139,6 +142,110 @@ namespace arteststudio::domain
 				return candidate.id == connectionId;
 			});
 		return connection == m_connections.cend() ? nullptr : &*connection;
+	}
+
+	DiagramSnapshot DiagramModel::CaptureSnapshot() const
+	{
+		return {m_nodes, m_connections};
+	}
+
+	RestoreSnapshotResult DiagramModel::ValidateSnapshot(const DiagramSnapshot& snapshot) noexcept
+	{
+		try
+		{
+			std::unordered_set<std::uint64_t> nodeIds;
+			nodeIds.reserve(snapshot.nodes.size());
+			for (const Node& node : snapshot.nodes)
+			{
+				if (!node.id)
+				{
+					return {DiagramSnapshotError::InvalidNodeId, node.id.value};
+				}
+				if (!nodeIds.insert(node.id.value).second)
+				{
+					return {DiagramSnapshotError::DuplicateNodeId, node.id.value};
+				}
+				if (node.kind != NodeKind::Rectangle && node.kind != NodeKind::Diamond)
+				{
+					return {DiagramSnapshotError::InvalidNodeKind, node.id.value};
+				}
+				if (node.width <= 0 || node.height <= 0)
+				{
+					return {DiagramSnapshotError::InvalidNodeDimensions, node.id.value};
+				}
+				if (node.id.value == std::numeric_limits<std::uint64_t>::max())
+				{
+					return {DiagramSnapshotError::IdentifierOverflow, node.id.value};
+				}
+			}
+
+			std::unordered_set<std::uint64_t> connectionIds;
+			connectionIds.reserve(snapshot.connections.size());
+			for (const Connection& connection : snapshot.connections)
+			{
+				if (!connection.id)
+				{
+					return {DiagramSnapshotError::InvalidConnectionId, connection.id.value};
+				}
+				if (!connectionIds.insert(connection.id.value).second)
+				{
+					return {DiagramSnapshotError::DuplicateConnectionId, connection.id.value};
+				}
+				if (connection.id.value == std::numeric_limits<std::uint64_t>::max())
+				{
+					return {DiagramSnapshotError::IdentifierOverflow, connection.id.value};
+				}
+				if (!nodeIds.contains(connection.from.nodeId.value))
+				{
+					return {DiagramSnapshotError::NodeNotFound, connection.from.nodeId.value};
+				}
+				if (!nodeIds.contains(connection.to.nodeId.value))
+				{
+					return {DiagramSnapshotError::NodeNotFound, connection.to.nodeId.value};
+				}
+				if (!IsValidPort(connection.from.portId) || !IsValidPort(connection.to.portId))
+				{
+					return {DiagramSnapshotError::InvalidPort, connection.id.value};
+				}
+			}
+
+			return {};
+		}
+		catch (const std::bad_alloc&)
+		{
+			return {DiagramSnapshotError::AllocationFailure};
+		}
+		catch (...)
+		{
+			return {DiagramSnapshotError::UnexpectedFailure};
+		}
+	}
+
+	RestoreSnapshotResult DiagramModel::RestoreSnapshot(DiagramSnapshot snapshot) noexcept
+	{
+		const RestoreSnapshotResult validation = ValidateSnapshot(snapshot);
+		if (!validation)
+		{
+			return validation;
+		}
+
+		std::uint64_t maximumNodeId = 0;
+		for (const Node& node : snapshot.nodes)
+		{
+			maximumNodeId = std::max(maximumNodeId, node.id.value);
+		}
+
+		std::uint64_t maximumConnectionId = 0;
+		for (const Connection& connection : snapshot.connections)
+		{
+			maximumConnectionId = std::max(maximumConnectionId, connection.id.value);
+		}
+
+		m_nodes = std::move(snapshot.nodes);
+		m_connections = std::move(snapshot.connections);
+		m_nextNodeId = maximumNodeId + 1;
+		m_nextConnectionId = maximumConnectionId + 1;
+		return {};
 	}
 
 	void DiagramModel::Clear() noexcept

@@ -71,6 +71,39 @@ namespace arteststudio::domain
 		std::vector<Point> intermediatePoints;
 	};
 
+	struct DiagramSnapshot
+	{
+		std::vector<Node> nodes;
+		std::vector<Connection> connections;
+	};
+
+	enum class DiagramSnapshotError
+	{
+		None,
+		InvalidNodeId,
+		DuplicateNodeId,
+		InvalidNodeKind,
+		InvalidNodeDimensions,
+		InvalidConnectionId,
+		DuplicateConnectionId,
+		NodeNotFound,
+		InvalidPort,
+		IdentifierOverflow,
+		AllocationFailure,
+		UnexpectedFailure
+	};
+
+	struct RestoreSnapshotResult
+	{
+		DiagramSnapshotError error = DiagramSnapshotError::None;
+		std::uint64_t identifier = 0;
+
+		[[nodiscard]] explicit operator bool() const noexcept
+		{
+			return error == DiagramSnapshotError::None;
+		}
+	};
+
 	enum class DiagramError
 	{
 		None,
@@ -113,6 +146,9 @@ namespace arteststudio::domain
 
 		[[nodiscard]] const std::vector<Node>& Nodes() const noexcept { return m_nodes; }
 		[[nodiscard]] const std::vector<Connection>& Connections() const noexcept { return m_connections; }
+		[[nodiscard]] DiagramSnapshot CaptureSnapshot() const;
+		[[nodiscard]] static RestoreSnapshotResult ValidateSnapshot(const DiagramSnapshot& snapshot) noexcept;
+		[[nodiscard]] RestoreSnapshotResult RestoreSnapshot(DiagramSnapshot snapshot) noexcept;
 
 		void Clear() noexcept;
 
