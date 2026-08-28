@@ -207,7 +207,9 @@
     <ClInclude Include="Domain\DiagramGeometry.h" />
     <ClInclude Include="Domain\OrthogonalRouter.h" />
     <ClInclude Include="Application\DiagramStorage.h" />
+    <ClInclude Include="Application\FaultService.h" />
     <ClInclude Include="Infrastructure\TextDiagramStorage.h" />
+    <ClInclude Include="Infrastructure\FileFaultReporter.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ChildFrm.cpp" />
@@ -239,6 +241,12 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Infrastructure\TextDiagramStorage.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Application\FaultService.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\FileFaultReporter.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
   </ItemGroup>

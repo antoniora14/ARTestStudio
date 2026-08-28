@@ -12,10 +12,102 @@
 #include "ChildFrm.h"
 #include "ARTestStudioDoc.h"
 #include "ARTestStudioView.h"
+#include "Application/FaultService.h"
+#include "Infrastructure/FileFaultReporter.h"
+
+#include <cstdlib>
+#include <exception>
+#include <string>
+#include <string_view>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
+
+namespace
+{
+	using arteststudio::application::Fault;
+	using arteststudio::application::FaultCategory;
+	using arteststudio::application::FaultService;
+	using arteststudio::application::FaultSeverity;
+	using arteststudio::infrastructure::FileFaultReporter;
+
+	[[nodiscard]] FileFaultReporter& GetDefaultFaultReporter() noexcept
+	{
+		static FileFaultReporter reporter;
+		return reporter;
+	}
+
+	[[nodiscard]] std::wstring GetMfcExceptionDetail(CException* exception) noexcept
+	{
+		if (exception == nullptr)
+		{
+			return L"MFC no proporciono informacion de la excepcion.";
+		}
+
+		try
+		{
+			wchar_t buffer[1024]{};
+			if (exception->GetErrorMessage(buffer, static_cast<UINT>(std::size(buffer))))
+			{
+				return buffer;
+			}
+		}
+		catch (...)
+		{
+		}
+		return L"Excepcion MFC sin detalle disponible.";
+	}
+
+	[[nodiscard]] std::wstring GetStandardExceptionDetail(const std::exception& exception)
+	{
+		const std::string_view narrow = exception.what() == nullptr ? std::string_view{} : exception.what();
+		std::wstring detail;
+		detail.reserve(narrow.size());
+		for (const unsigned char character : narrow)
+		{
+			detail.push_back(static_cast<wchar_t>(character));
+		}
+		return detail;
+	}
+
+	void ReportApplicationFault(
+		FaultSeverity severity,
+		FaultCategory category,
+		std::wstring_view code,
+		std::wstring_view operation,
+		std::wstring_view message,
+		std::wstring_view detail = {}) noexcept
+	{
+		try
+		{
+			FaultService::Report(Fault{
+				severity,
+				category,
+				std::wstring{code},
+				std::wstring{operation},
+				std::wstring{message},
+				std::wstring{detail}});
+		}
+		catch (...)
+		{
+		}
+	}
+
+	void ShowUnexpectedFailure() noexcept
+	{
+		try
+		{
+			AfxMessageBox(
+				L"ARTestStudio encontro un error inesperado y debe cerrar. "
+				L"El detalle fue registrado en el archivo de diagnostico.",
+				MB_OK | MB_ICONERROR);
+		}
+		catch (...)
+		{
+		}
+	}
+}
 
 
 // CARTestStudioApp
@@ -34,6 +126,7 @@ END_MESSAGE_MAP()
 
 CARTestStudioApp::CARTestStudioApp() noexcept
 {
+	FaultService::Configure(&GetDefaultFaultReporter());
 	m_bHiColorIcons = TRUE;
 
 
@@ -80,6 +173,12 @@ BOOL CARTestStudioApp::InitInstance()
 	// Initialize OLE libraries
 	if (!AfxOleInit())
 	{
+		ReportApplicationFault(
+			FaultSeverity::Critical,
+			FaultCategory::Application,
+			L"APP_OLE_INIT_FAILED",
+			L"Inicializacion de la aplicacion",
+			L"No se pudieron inicializar las bibliotecas OLE.");
 		AfxMessageBox(IDP_OLE_INIT_FAILED);
 		return FALSE;
 	}
@@ -120,13 +219,27 @@ BOOL CARTestStudioApp::InitInstance()
 		RUNTIME_CLASS(CChildFrame), // custom MDI child frame
 		RUNTIME_CLASS(CARTestStudioView));
 	if (!pDocTemplate)
+	{
+		ReportApplicationFault(
+			FaultSeverity::Critical,
+			FaultCategory::Application,
+			L"APP_DOCUMENT_TEMPLATE_FAILED",
+			L"Inicializacion de la aplicacion",
+			L"No se pudo crear la plantilla de documentos.");
 		return FALSE;
+	}
 	AddDocTemplate(pDocTemplate);
 
 	// create main MDI Frame window
 	CMainFrame* pMainFrame = new CMainFrame;
 	if (!pMainFrame || !pMainFrame->LoadFrame(IDR_MAINFRAME))
 	{
+		ReportApplicationFault(
+			FaultSeverity::Critical,
+			FaultCategory::Application,
+			L"APP_MAIN_FRAME_FAILED",
+			L"Inicializacion de la aplicacion",
+			L"No se pudo crear la ventana principal.");
 		delete pMainFrame;
 		return FALSE;
 	}
@@ -156,6 +269,75 @@ int CARTestStudioApp::ExitInstance()
 	AfxOleTerm(FALSE);
 
 	return CWinAppEx::ExitInstance();
+}
+
+int CARTestStudioApp::Run()
+{
+	try
+	{
+		return CWinAppEx::Run();
+	}
+	catch (CException* exception)
+	{
+		const std::wstring detail = GetMfcExceptionDetail(exception);
+		ReportApplicationFault(
+			FaultSeverity::Critical,
+			FaultCategory::Unexpected,
+			L"APP_UNHANDLED_MFC_EXCEPTION",
+			L"Bucle principal de la aplicacion",
+			L"Una excepcion MFC alcanzo la frontera global.",
+			detail);
+		if (exception != nullptr)
+		{
+			exception->Delete();
+		}
+		ShowUnexpectedFailure();
+		return EXIT_FAILURE;
+	}
+	catch (const std::exception& exception)
+	{
+		const std::wstring detail = GetStandardExceptionDetail(exception);
+		ReportApplicationFault(
+			FaultSeverity::Critical,
+			FaultCategory::Unexpected,
+			L"APP_UNHANDLED_STANDARD_EXCEPTION",
+			L"Bucle principal de la aplicacion",
+			L"Una excepcion estandar alcanzo la frontera global.",
+			detail);
+		ShowUnexpectedFailure();
+		return EXIT_FAILURE;
+	}
+	catch (...)
+	{
+		ReportApplicationFault(
+			FaultSeverity::Critical,
+			FaultCategory::Unexpected,
+			L"APP_UNHANDLED_UNKNOWN_EXCEPTION",
+			L"Bucle principal de la aplicacion",
+			L"Una excepcion desconocida alcanzo la frontera global.");
+		ShowUnexpectedFailure();
+		return EXIT_FAILURE;
+	}
+}
+
+LRESULT CARTestStudioApp::ProcessWndProcException(CException* exception, const MSG* message)
+{
+	std::wstring operation = L"Procesamiento de un mensaje de ventana";
+	if (message != nullptr)
+	{
+		operation += L" (mensaje ";
+		operation += std::to_wstring(message->message);
+		operation += L")";
+	}
+
+	ReportApplicationFault(
+		FaultSeverity::Error,
+		FaultCategory::UserInterface,
+		L"UI_MFC_MESSAGE_EXCEPTION",
+		operation,
+		L"MFC capturo una excepcion durante el procesamiento de la interfaz.",
+		GetMfcExceptionDetail(exception));
+	return CWinAppEx::ProcessWndProcException(exception, message);
 }
 
 // CARTestStudioApp message handlers

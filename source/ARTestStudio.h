@@ -24,6 +24,8 @@ public:
 public:
 	virtual BOOL InitInstance();
 	virtual int ExitInstance();
+	virtual int Run() override;
+	virtual LRESULT ProcessWndProcException(CException* exception, const MSG* message) override;
 
 // Implementation
 	UINT  m_nAppLook;

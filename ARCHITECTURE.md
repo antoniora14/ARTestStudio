@@ -53,6 +53,17 @@ adaptador captura excepciones de memoria, biblioteca estandar y errores
 desconocidos en su frontera. La capa MFC transforma el resultado en un mensaje
 para el usuario y conserva el diagrama existente cuando una carga falla.
 
+Los fallos transversales se envian a `FaultService` mediante `IFaultReporter`.
+La aplicacion configura `FileFaultReporter` en su punto de composicion, por lo que
+el dominio no depende de MFC, Windows ni del sistema de logs. La frontera global
+del bucle MFC registra excepciones inesperadas y los errores de persistencia usan
+el mismo canal antes de mostrar un mensaje al usuario.
+
+El log predeterminado se escribe en
+`%LOCALAPPDATA%\ARTestStudio\Logs\ARTestStudio.log` como UTF-8. Al alcanzar 2 MB,
+el archivo anterior se conserva como `ARTestStudio.previous.log`. Un fallo del
+propio reporter se absorbe para no ocultar ni agravar el error original.
+
 ## Pruebas
 
 El proyecto `ARTestStudio.Tests` prueba el dominio y la infraestructura sin abrir

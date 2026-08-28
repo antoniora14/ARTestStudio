@@ -1,6 +1,8 @@
 #include "Domain/DiagramModel.h"
 #include "Domain/DiagramGeometry.h"
 #include "Domain/OrthogonalRouter.h"
+#include "Application/FaultService.h"
+#include "Infrastructure/FileFaultReporter.h"
 #include "Infrastructure/TextDiagramStorage.h"
 
 #include <algorithm>
@@ -11,8 +13,10 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <string_view>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -21,6 +25,12 @@ namespace
 	using namespace arteststudio::domain;
 	using arteststudio::application::StorageError;
 	using arteststudio::application::StorageResult;
+	using arteststudio::application::Fault;
+	using arteststudio::application::FaultCategory;
+	using arteststudio::application::FaultService;
+	using arteststudio::application::FaultSeverity;
+	using arteststudio::application::IFaultReporter;
+	using arteststudio::infrastructure::FileFaultReporter;
 	using arteststudio::infrastructure::TextDiagramStorage;
 
 	struct TestCase
@@ -71,6 +81,9 @@ namespace
 			std::filesystem::path temporaryPath = m_path;
 			temporaryPath += L".tmp";
 			std::filesystem::remove(temporaryPath, error);
+			const std::filesystem::path previousPath = m_path.parent_path() /
+				(m_path.stem().wstring() + L".previous" + m_path.extension().wstring());
+			std::filesystem::remove(previousPath, error);
 		}
 
 		[[nodiscard]] const std::filesystem::path& Path() const noexcept
@@ -80,6 +93,49 @@ namespace
 
 	private:
 		std::filesystem::path m_path;
+	};
+
+	class RecordingFaultReporter final : public IFaultReporter
+	{
+	public:
+		void Report(const Fault& fault) override
+		{
+			++count;
+			lastSeverity = fault.severity;
+			lastCode = fault.code;
+			lastOperation = fault.operation;
+		}
+
+		int count = 0;
+		FaultSeverity lastSeverity = FaultSeverity::Information;
+		std::wstring lastCode;
+		std::wstring lastOperation;
+	};
+
+	class ThrowingFaultReporter final : public IFaultReporter
+	{
+	public:
+		void Report(const Fault&) override
+		{
+			throw std::runtime_error("simulated reporter failure");
+		}
+	};
+
+	class FaultReporterScope final
+	{
+	public:
+		explicit FaultReporterScope(IFaultReporter* reporter) noexcept
+		{
+			FaultService::Configure(reporter);
+		}
+
+		~FaultReporterScope()
+		{
+			FaultService::Configure(nullptr);
+		}
+
+		FaultReporterScope(const FaultReporterScope&) = delete;
+		FaultReporterScope& operator=(const FaultReporterScope&) = delete;
 	};
 
 	std::vector<Point> GetFullRoute(const DiagramModel& diagram, const Connection& connection)
@@ -558,6 +614,95 @@ namespace
 		Require(loadResult.error == StorageError::UnsupportedFileExtension,
 			"Loading a non-.atd path must report the extension error before accessing the file.");
 	}
+
+	void RoutesFaultsThroughTheConfiguredReporter()
+	{
+		RecordingFaultReporter reporter;
+		const FaultReporterScope scope{&reporter};
+		FaultService::Report(Fault{
+			FaultSeverity::Error,
+			FaultCategory::Storage,
+			L"TEST_STORAGE_FAILURE",
+			L"Regression test",
+			L"Expected test fault",
+			L"No external side effect"});
+
+		Require(reporter.count == 1, "The configured reporter must receive each fault.");
+		Require(reporter.lastSeverity == FaultSeverity::Error, "Fault severity must be preserved.");
+		Require(reporter.lastCode == L"TEST_STORAGE_FAILURE", "Fault code must be preserved.");
+		Require(reporter.lastOperation == L"Regression test", "Fault operation must be preserved.");
+	}
+
+	void WritesStructuredFaultLogs()
+	{
+		TemporaryDiagramFile file{".log"};
+		FileFaultReporter reporter{file.Path()};
+		reporter.Report(Fault{
+			FaultSeverity::Warning,
+			FaultCategory::Storage,
+			L"TEST_LOG_ENTRY",
+			L"Write regression log",
+			L"The logger must write UTF-8",
+			L"Technical detail 42"});
+
+		std::ifstream input(file.Path(), std::ios::binary);
+		const std::string contents{
+			std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
+		Require(input.good() || input.eof(), "The generated fault log must be readable.");
+		Require(contents.find("[WARNING]") != std::string::npos, "The log must contain severity.");
+		Require(contents.find("[STORAGE]") != std::string::npos, "The log must contain category.");
+		Require(contents.find("TEST_LOG_ENTRY") != std::string::npos, "The log must contain the stable code.");
+		Require(contents.find("Technical detail 42") != std::string::npos,
+			"The log must contain the technical detail.");
+	}
+
+	void FaultReportingFailuresNeverEscape()
+	{
+		ThrowingFaultReporter reporter;
+		const FaultReporterScope scope{&reporter};
+		FaultService::Report(Fault{
+			FaultSeverity::Critical,
+			FaultCategory::Unexpected,
+			L"TEST_THROWING_REPORTER",
+			L"Fault boundary regression",
+			L"The reporter intentionally throws",
+			{}});
+		Require(true, "A reporter exception must not escape FaultService.");
+	}
+
+	void RotatesOversizedFaultLogs()
+	{
+		TemporaryDiagramFile file{".log"};
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			const std::string block(1024, 'x');
+			for (int index = 0; index < 2048; ++index)
+			{
+				output.write(block.data(), static_cast<std::streamsize>(block.size()));
+			}
+		}
+
+		FileFaultReporter reporter{file.Path()};
+		reporter.Report(Fault{
+			FaultSeverity::Error,
+			FaultCategory::Application,
+			L"TEST_ROTATED_ENTRY",
+			L"Rotate regression log",
+			L"This entry belongs to the new log",
+			{}});
+
+		const std::filesystem::path previousPath = file.Path().parent_path() /
+			(file.Path().stem().wstring() + L".previous" + file.Path().extension().wstring());
+		Require(std::filesystem::exists(previousPath), "An oversized log must be preserved as previous.log.");
+		Require(std::filesystem::file_size(previousPath) >= 2 * 1024 * 1024,
+			"The rotated file must contain the previous log contents.");
+
+		std::ifstream input(file.Path(), std::ios::binary);
+		const std::string contents{
+			std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
+		Require(contents.find("TEST_ROTATED_ENTRY") != std::string::npos,
+			"The fault that triggered rotation must be written to the new log.");
+	}
 }
 
 int main()
@@ -581,6 +726,10 @@ int main()
 		{"rejects unsupported file versions", RejectsUnsupportedFileVersions},
 		{"reports missing diagram files", ReportsMissingDiagramFiles},
 		{"rejects non-diagram file extensions", RejectsNonDiagramFileExtensions},
+		{"routes faults through the configured reporter", RoutesFaultsThroughTheConfiguredReporter},
+		{"writes structured fault logs", WritesStructuredFaultLogs},
+		{"fault reporting failures never escape", FaultReportingFailuresNeverEscape},
+		{"rotates oversized fault logs", RotatesOversizedFaultLogs},
 	};
 
 	int failures = 0;

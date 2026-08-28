@@ -12,6 +12,7 @@
 
 #include "ARTestStudioDoc.h"
 #include "Application/DiagramStorage.h"
+#include "Application/FaultService.h"
 #include "Infrastructure/TextDiagramStorage.h"
 
 #include <filesystem>
@@ -27,6 +28,10 @@
 namespace
 {
 	using arteststudio::application::DescribeStorageError;
+	using arteststudio::application::Fault;
+	using arteststudio::application::FaultCategory;
+	using arteststudio::application::FaultService;
+	using arteststudio::application::FaultSeverity;
 	using arteststudio::application::IDiagramStorage;
 	using arteststudio::application::StorageResult;
 	using arteststudio::infrastructure::TextDiagramStorage;
@@ -57,6 +62,28 @@ namespace
 			message += L"\n";
 			message += result.detail;
 		}
+
+		std::wstring technicalDetail;
+		if (!path.empty())
+		{
+			technicalDetail = L"Ruta: ";
+			technicalDetail += path.native();
+		}
+		if (!result.detail.empty())
+		{
+			if (!technicalDetail.empty())
+			{
+				technicalDetail += L" | ";
+			}
+			technicalDetail += result.detail;
+		}
+		FaultService::Report(Fault{
+			FaultSeverity::Warning,
+			FaultCategory::Storage,
+			L"STORAGE_" + std::to_wstring(static_cast<int>(result.error)),
+			std::wstring{operation},
+			std::wstring{DescribeStorageError(result.error)},
+			std::move(technicalDetail)});
 
 		AfxMessageBox(message.c_str(), MB_OK | MB_ICONERROR);
 	}
