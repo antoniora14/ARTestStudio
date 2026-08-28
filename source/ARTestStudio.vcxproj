@@ -206,6 +206,8 @@
     <ClInclude Include="Domain\DiagramModel.h" />
     <ClInclude Include="Domain\DiagramGeometry.h" />
     <ClInclude Include="Domain\OrthogonalRouter.h" />
+    <ClInclude Include="Application\DiagramStorage.h" />
+    <ClInclude Include="Infrastructure\TextDiagramStorage.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ChildFrm.cpp" />
@@ -234,6 +236,9 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Domain\OrthogonalRouter.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\TextDiagramStorage.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
   </ItemGroup>

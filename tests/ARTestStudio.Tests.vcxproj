@@ -53,6 +53,7 @@
     <ClCompile Include="..\source\Domain\DiagramModel.cpp" />
     <ClCompile Include="..\source\Domain\DiagramGeometry.cpp" />
     <ClCompile Include="..\source\Domain\OrthogonalRouter.cpp" />
+    <ClCompile Include="..\source\Infrastructure\TextDiagramStorage.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

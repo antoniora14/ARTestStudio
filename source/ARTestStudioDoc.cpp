@@ -11,11 +11,56 @@
 #endif
 
 #include "ARTestStudioDoc.h"
+#include "Application/DiagramStorage.h"
+#include "Infrastructure/TextDiagramStorage.h"
+
+#include <filesystem>
 #include <propkey.h>
+#include <string>
+#include <string_view>
+#include <utility>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
+
+namespace
+{
+	using arteststudio::application::DescribeStorageError;
+	using arteststudio::application::IDiagramStorage;
+	using arteststudio::application::StorageResult;
+	using arteststudio::infrastructure::TextDiagramStorage;
+
+	[[nodiscard]] IDiagramStorage& GetDiagramStorage() noexcept
+	{
+		static TextDiagramStorage storage;
+		return storage;
+	}
+
+	void ReportStorageFailure(
+		std::wstring_view operation,
+		const std::filesystem::path& path,
+		const StorageResult& result)
+	{
+		std::wstring message = L"No se pudo ";
+		message.append(operation);
+		message += L" el diagrama";
+		if (!path.empty())
+		{
+			message += L":\n";
+			message += path.native();
+		}
+		message += L"\n\n";
+		message += DescribeStorageError(result.error);
+		if (!result.detail.empty())
+		{
+			message += L"\n";
+			message += result.detail;
+		}
+
+		AfxMessageBox(message.c_str(), MB_OK | MB_ICONERROR);
+	}
+}
 
 // CARTestStudioDoc
 
@@ -29,8 +74,6 @@ END_MESSAGE_MAP()
 
 CARTestStudioDoc::CARTestStudioDoc() noexcept
 {
-	// TODO: add one-time construction code here
-
 }
 
 CARTestStudioDoc::~CARTestStudioDoc()
@@ -54,24 +97,54 @@ BOOL CARTestStudioDoc::OnNewDocument()
 
 void CARTestStudioDoc::Serialize(CArchive& ar)
 {
-	if (ar.IsStoring())
-	{
-		// TODO: add storing code here
-	}
-	else
-	{
-		// TODO: add loading code here
-	}
+	// File persistence is handled by the storage adapter in OnOpenDocument and
+	// OnSaveDocument. Keep this override for MFC document compatibility.
+	(void)ar;
 }
 
 BOOL CARTestStudioDoc::OnOpenDocument(LPCTSTR lpszPathName)
 {
-	return 0;
+	const std::filesystem::path path = lpszPathName == nullptr
+		? std::filesystem::path{}
+		: std::filesystem::path{lpszPathName};
+	if (path.empty())
+	{
+		const StorageResult result{arteststudio::application::StorageError::InvalidPath};
+		ReportStorageFailure(L"abrir", path, result);
+		return FALSE;
+	}
+
+	arteststudio::domain::DiagramModel loadedDiagram;
+	const StorageResult result = GetDiagramStorage().Load(path, loadedDiagram);
+	if (!result)
+	{
+		ReportStorageFailure(L"abrir", path, result);
+		return FALSE;
+	}
+
+	DeleteContents();
+	m_diagram = std::move(loadedDiagram);
+	SetPathName(lpszPathName, TRUE);
+	SetModifiedFlag(FALSE);
+	UpdateAllViews(nullptr);
+	return TRUE;
 }
 
 BOOL CARTestStudioDoc::OnSaveDocument(LPCTSTR lpszPathName)
 {
-	return 0;
+	const std::filesystem::path path = lpszPathName == nullptr
+		? std::filesystem::path{}
+		: std::filesystem::path{lpszPathName};
+	const StorageResult result = GetDiagramStorage().Save(path, m_diagram);
+	if (!result)
+	{
+		ReportStorageFailure(L"guardar", path, result);
+		return FALSE;
+	}
+
+	SetPathName(lpszPathName, TRUE);
+	SetModifiedFlag(FALSE);
+	return TRUE;
 }
 
 #ifdef SHARED_HANDLERS

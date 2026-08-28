@@ -1,18 +1,26 @@
 #include "Domain/DiagramModel.h"
 #include "Domain/DiagramGeometry.h"
 #include "Domain/OrthogonalRouter.h"
+#include "Infrastructure/TextDiagramStorage.h"
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <exception>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
+#include <string>
 #include <string_view>
 #include <vector>
 
 namespace
 {
 	using namespace arteststudio::domain;
+	using arteststudio::application::StorageError;
+	using arteststudio::application::StorageResult;
+	using arteststudio::infrastructure::TextDiagramStorage;
 
 	struct TestCase
 	{
@@ -44,6 +52,34 @@ namespace
 			throw TestFailure(message);
 		}
 	}
+
+	class TemporaryDiagramFile final
+	{
+	public:
+		explicit TemporaryDiagramFile(std::string_view extension = ".atd")
+		{
+			const auto suffix = std::chrono::steady_clock::now().time_since_epoch().count();
+			m_path = std::filesystem::temp_directory_path() /
+				("ARTestStudio.Tests." + std::to_string(suffix) + std::string{extension});
+		}
+
+		~TemporaryDiagramFile()
+		{
+			std::error_code error;
+			std::filesystem::remove(m_path, error);
+			std::filesystem::path temporaryPath = m_path;
+			temporaryPath += L".tmp";
+			std::filesystem::remove(temporaryPath, error);
+		}
+
+		[[nodiscard]] const std::filesystem::path& Path() const noexcept
+		{
+			return m_path;
+		}
+
+	private:
+		std::filesystem::path m_path;
+	};
 
 	std::vector<Point> GetFullRoute(const DiagramModel& diagram, const Connection& connection)
 	{
@@ -270,6 +306,132 @@ namespace
 			}
 		}
 	}
+
+	void PersistsAndRestoresDiagram()
+	{
+		DiagramModel original;
+		const NodeId source = original.AddNode(NodeKind::Rectangle, {10, 20}, 180, 90, L"Fuente ñ");
+		const NodeId target = original.AddNode(NodeKind::Diamond, {420, 260}, 110, 80, L"Condición");
+		const AddConnectionResult connection = original.AddConnection(
+			{source, PortId::Right},
+			{target, PortId::Top},
+			{{240, 65}, {475, 65}});
+		Require(static_cast<bool>(connection), "The persisted connection must be valid.");
+
+		TemporaryDiagramFile file;
+		const TextDiagramStorage storage;
+		const StorageResult saved = storage.Save(file.Path(), original);
+		Require(static_cast<bool>(saved), "A valid diagram must be saved.");
+
+		DiagramModel restored;
+		const StorageResult loaded = storage.Load(file.Path(), restored);
+		Require(static_cast<bool>(loaded), "A saved diagram must be loaded.");
+		Require(restored.Nodes().size() == 2, "All nodes must be restored.");
+		Require(restored.Connections().size() == 1, "All connections must be restored.");
+
+		const Node& restoredSource = restored.Nodes()[0];
+		const Node& restoredTarget = restored.Nodes()[1];
+		Require(restoredSource.kind == NodeKind::Rectangle, "The source kind must be restored.");
+		Require(restoredSource.position == Point{10, 20}, "The source position must be restored.");
+		Require(restoredSource.width == 180 && restoredSource.height == 90,
+			"The source dimensions must be restored.");
+		Require(restoredSource.label == L"Fuente ñ", "UTF-8 labels must round-trip.");
+		Require(restoredTarget.kind == NodeKind::Diamond, "The target kind must be restored.");
+		Require(restoredTarget.label == L"Condición", "Accented labels must round-trip.");
+
+		const Connection& restoredConnection = restored.Connections().front();
+		Require(restoredConnection.from.nodeId == restoredSource.id,
+			"The source endpoint must reference the restored source.");
+		Require(restoredConnection.to.nodeId == restoredTarget.id,
+			"The target endpoint must reference the restored target.");
+		Require(restoredConnection.from.portId == PortId::Right &&
+			restoredConnection.to.portId == PortId::Top,
+			"Connection ports must be restored.");
+		Require(restoredConnection.intermediatePoints == std::vector<Point>{{240, 65}, {475, 65}},
+			"The route points must be restored.");
+	}
+
+	void RejectsCorruptFilesWithoutChangingTheDiagram()
+	{
+		TemporaryDiagramFile file;
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output << "NOT_A_DIAGRAM 1\n";
+		}
+
+		DiagramModel existing;
+		const NodeId originalId = existing.AddNode(NodeKind::Rectangle, {5, 8}, L"Keep me");
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Load(file.Path(), existing);
+
+		Require(result.error == StorageError::InvalidFormat, "A corrupt header must be reported.");
+		Require(existing.Nodes().size() == 1, "A failed load must preserve the current diagram.");
+		Require(existing.FindNode(originalId) != nullptr, "The original node must remain after a failed load.");
+	}
+
+	void RejectsConnectionsToMissingNodes()
+	{
+		TemporaryDiagramFile file;
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output << "ARTESTSTUDIO_DIAGRAM 1\n"
+				<< "NODES 1\n"
+				<< "NODE 1 0 10 20 150 100 \"Only node\"\n"
+				<< "CONNECTIONS 1\n"
+				<< "CONNECTION 1 1 1 999 3 0\n"
+				<< "END\n";
+		}
+
+		DiagramModel diagram;
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Load(file.Path(), diagram);
+		Require(result.error == StorageError::InvalidData,
+			"Connections to missing nodes must be rejected as invalid data.");
+		Require(diagram.Nodes().empty() && diagram.Connections().empty(),
+			"A rejected document must not be partially loaded.");
+	}
+
+	void RejectsUnsupportedFileVersions()
+	{
+		TemporaryDiagramFile file;
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output << "ARTESTSTUDIO_DIAGRAM 999\nNODES 0\nCONNECTIONS 0\nEND\n";
+		}
+
+		DiagramModel diagram;
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Load(file.Path(), diagram);
+		Require(result.error == StorageError::UnsupportedVersion,
+			"Future file versions must be rejected explicitly.");
+	}
+
+	void ReportsMissingDiagramFiles()
+	{
+		TemporaryDiagramFile file;
+		DiagramModel diagram;
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Load(file.Path(), diagram);
+		Require(result.error == StorageError::FileNotFound, "Missing files must have a specific error.");
+	}
+
+	void RejectsNonDiagramFileExtensions()
+	{
+		TemporaryDiagramFile projectFile{".atprj"};
+		DiagramModel diagram;
+		(void)diagram.AddNode(NodeKind::Rectangle, {0, 0}, L"Diagram only");
+		const TextDiagramStorage storage;
+
+		const StorageResult saveResult = storage.Save(projectFile.Path(), diagram);
+		Require(saveResult.error == StorageError::UnsupportedFileExtension,
+			"The diagram storage must reject the reserved project extension.");
+		Require(!std::filesystem::exists(projectFile.Path()),
+			"A rejected extension must not create a file.");
+
+		const StorageResult loadResult = storage.Load(projectFile.Path(), diagram);
+		Require(loadResult.error == StorageError::UnsupportedFileExtension,
+			"Loading a non-.atd path must report the extension error before accessing the file.");
+	}
 }
 
 int main()
@@ -282,6 +444,12 @@ int main()
 		{"routes orthogonally around blocks", RoutesOrthogonallyAroundBlocks},
 		{"reroutes when an obstacle moves", ReroutesWhenAnObstacleMoves},
 		{"routes every port combination", RoutesEveryPortCombination},
+		{"persists and restores diagrams", PersistsAndRestoresDiagram},
+		{"rejects corrupt files without changing the diagram", RejectsCorruptFilesWithoutChangingTheDiagram},
+		{"rejects connections to missing nodes", RejectsConnectionsToMissingNodes},
+		{"rejects unsupported file versions", RejectsUnsupportedFileVersions},
+		{"reports missing diagram files", ReportsMissingDiagramFiles},
+		{"rejects non-diagram file extensions", RejectsNonDiagramFileExtensions},
 	};
 
 	int failures = 0;

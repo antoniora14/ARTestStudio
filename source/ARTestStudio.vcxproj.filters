@@ -16,6 +16,12 @@
     <Filter Include="Domain">
       <UniqueIdentifier>{DC0CA8EB-F8D7-4871-85AE-F0E1E54493E9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Application">
+      <UniqueIdentifier>{C28B4542-BC17-4D2F-B660-8B7C6D58998D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Infrastructure">
+      <UniqueIdentifier>{EB31E861-A11C-43DA-A8C2-1E74631AE443}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ARTestStudio.h">
@@ -87,6 +93,12 @@
     <ClInclude Include="Domain\OrthogonalRouter.h">
       <Filter>Domain</Filter>
     </ClInclude>
+    <ClInclude Include="Application\DiagramStorage.h">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="Infrastructure\TextDiagramStorage.h">
+      <Filter>Infrastructure</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ARTestStudio.cpp">
@@ -139,6 +151,9 @@
     </ClCompile>
     <ClCompile Include="Domain\OrthogonalRouter.cpp">
       <Filter>Domain</Filter>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\TextDiagramStorage.cpp">
+      <Filter>Infrastructure</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
