@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.35731.53
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ARTestStudio", "ARTestStudio.vcxproj", "{D5C627AB-5603-474F-8AE9-99CEF14CECA4}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ARTestStudio.Tests", "..\tests\ARTestStudio.Tests.vcxproj", "{623849C2-0868-4C62-8575-A04186918FF1}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ARTestStudio.UnitTests", "..\tests\ARTestStudio.UnitTests.vcxproj", "{623849C2-0868-4C62-8575-A04186918FF1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

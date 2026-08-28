@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Application">
+      <UniqueIdentifier>{B2BD0E2A-F119-4930-BD3F-6880019157F4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Domain">
+      <UniqueIdentifier>{805954CA-E278-43C8-8978-5C5837BA9089}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Infrastructure">
+      <UniqueIdentifier>{036C6033-A5B3-41BF-8188-AB0FA7BA9F1F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TestSupport">
+      <UniqueIdentifier>{8FF457E6-96D5-43F6-9D71-E8476692762B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Production Sources">
+      <UniqueIdentifier>{B459C59F-0CE6-4A5D-A03A-528FC4B62E57}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="TestSupport\TestSupport.h">
+      <Filter>TestSupport</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="TestMain.cpp">
+      <Filter>TestSupport</Filter>
+    </ClCompile>
+    <ClCompile Include="Application\FaultServiceTests.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
+    <ClCompile Include="Domain\DiagramModelTests.cpp">
+      <Filter>Domain</Filter>
+    </ClCompile>
+    <ClCompile Include="Domain\OrthogonalRouterTests.cpp">
+      <Filter>Domain</Filter>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\FileFaultReporterTests.cpp">
+      <Filter>Infrastructure</Filter>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\TextDiagramStorageTests.cpp">
+      <Filter>Infrastructure</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Domain\DiagramModel.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Domain\DiagramGeometry.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Domain\OrthogonalRouter.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Infrastructure\TextDiagramStorage.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Infrastructure\WindowsAtomicFileWriter.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Application\FaultService.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Infrastructure\FileFaultReporter.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

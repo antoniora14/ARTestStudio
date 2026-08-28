@@ -79,9 +79,18 @@ propio reporter se absorbe para no ocultar ni agravar el error original.
 
 ## Pruebas
 
-El proyecto `ARTestStudio.Tests` prueba el dominio y la infraestructura sin abrir
-la interfaz MFC. Las pruebas de persistencia cubren round-trip de datos y UTF-8,
-archivos corruptos, referencias inexistentes, versiones incompatibles y archivos
-no encontrados. Tambien verifican limites de archivo y etiqueta, documentos
+El proyecto `ARTestStudio.UnitTests` usa Google Test y prueba las capas sin abrir
+la interfaz MFC. Los casos se separan por responsabilidad en `tests/Domain`,
+`tests/Application` y `tests/Infrastructure`; los dobles y utilidades comunes
+permanecen en `tests/TestSupport`.
+
+Las pruebas de persistencia cubren round-trip de datos y UTF-8, archivos
+corruptos, referencias inexistentes, versiones incompatibles y archivos no
+encontrados. Tambien verifican limites de archivo y etiqueta, documentos
 truncados, limpieza de temporales obsoletos y preservacion del archivo anterior
 cuando una escritura o reemplazo falla.
+
+Google Test se obtiene mediante el manifiesto `vcpkg.json`, cuya linea base fija
+las versiones para que Visual Studio y la compilacion por script consuman la
+misma dependencia. El ejecutable emite XML nativo y el flujo de compilacion crea
+ademas un reporte HTML legible bajo `artifacts/test-results`.

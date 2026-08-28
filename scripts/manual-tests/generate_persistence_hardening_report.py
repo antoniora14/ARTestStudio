@@ -426,7 +426,7 @@ def build_report(output_path: Path):
     add_fixed_table(doc, [620, 4600, 4140], [
         ("Step", "Action", "Expected result"),
         ("1", r"Open Command Prompt and run: cd /d D:\GitHub\main\ARTestStudio", "The prompt changes to the repository root."),
-        ("2", r"Run: scripts\build.cmd -Configuration Release", "Build completes and prints 29/29 tests passed."),
+        ("2", r"Run: scripts\build.cmd -Configuration Release", "Build completes, 29 Google Test cases pass, and XML/HTML reports are generated."),
         ("3", r"Run: scripts\manual-tests\generate_persistence_hardening_fixtures.cmd", "A paused window lists four generated fixture paths."),
         ("4", r"Start: artifacts\bin\x64\Release\ARTestStudio.exe", "ARTestStudio opens without an error dialog."),
         ("5", r"Keep File Explorer open at artifacts\manual-tests\persistence-hardening.", "All fixtures are visible; file extensions are displayed."),

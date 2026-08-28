@@ -11,6 +11,7 @@
 x64/
 x86/
 [Aa]rtifacts/
+vcpkg_installed/
 CompaStu.*/
 
 # Compiler and linker artifacts

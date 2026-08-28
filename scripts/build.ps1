@@ -27,13 +27,30 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if (-not $SkipTests) {
-    $testExecutable = Join-Path $repositoryRoot "artifacts\bin\$Platform\$Configuration\ARTestStudio.Tests.exe"
+    $testExecutable = Join-Path $repositoryRoot "artifacts\bin\$Platform\$Configuration\ARTestStudio.UnitTests.exe"
     if (-not (Test-Path -LiteralPath $testExecutable)) {
         throw "No se encontro el ejecutable de pruebas: $testExecutable"
     }
 
-    & $testExecutable
-    if ($LASTEXITCODE -ne 0) {
-        throw "Las pruebas fallaron con codigo $LASTEXITCODE."
+    $testResultsDirectory = Join-Path $repositoryRoot "artifacts\test-results\$Platform\$Configuration"
+    [System.IO.Directory]::CreateDirectory($testResultsDirectory) | Out-Null
+    $xmlReportPath = Join-Path $testResultsDirectory 'ARTestStudio.UnitTests.xml'
+    $htmlReportPath = Join-Path $testResultsDirectory 'ARTestStudio.UnitTests.html'
+
+    & $testExecutable "--gtest_output=xml:$xmlReportPath"
+    $testExitCode = $LASTEXITCODE
+
+    if (Test-Path -LiteralPath $xmlReportPath) {
+        $reportScript = Join-Path $PSScriptRoot 'test-report\New-GoogleTestHtmlReport.ps1'
+        $reportValidationScript = Join-Path $PSScriptRoot 'test-report\Test-GoogleTestHtmlReport.ps1'
+        & $reportValidationScript
+        & $reportScript -XmlPath $xmlReportPath -HtmlPath $htmlReportPath -Configuration $Configuration -Platform $Platform
     }
+
+    if ($testExitCode -ne 0) {
+        throw "Las pruebas fallaron con codigo $testExitCode. Reporte: $htmlReportPath"
+    }
+
+    Write-Host "Reporte XML: $xmlReportPath"
+    Write-Host "Reporte HTML: $htmlReportPath"
 }
