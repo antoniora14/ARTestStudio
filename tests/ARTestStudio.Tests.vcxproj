@@ -54,6 +54,7 @@
     <ClCompile Include="..\source\Domain\DiagramGeometry.cpp" />
     <ClCompile Include="..\source\Domain\OrthogonalRouter.cpp" />
     <ClCompile Include="..\source\Infrastructure\TextDiagramStorage.cpp" />
+    <ClCompile Include="..\source\Infrastructure\WindowsAtomicFileWriter.cpp" />
     <ClCompile Include="..\source\Application\FaultService.cpp" />
     <ClCompile Include="..\source\Infrastructure\FileFaultReporter.cpp" />
   </ItemGroup>

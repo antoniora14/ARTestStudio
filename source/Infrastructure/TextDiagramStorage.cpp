@@ -1,4 +1,5 @@
 #include "TextDiagramStorage.h"
+#include "WindowsAtomicFileWriter.h"
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -19,6 +20,9 @@ namespace arteststudio::infrastructure
 {
 	namespace
 	{
+		using application::AtomicWriteError;
+		using application::AtomicWriteResult;
+		using application::DiagramStorageLimits;
 		using application::StorageError;
 		using application::StorageResult;
 		using application::kDiagramFileExtension;
@@ -38,7 +42,6 @@ namespace arteststudio::infrastructure
 		constexpr std::uint64_t kMaximumNodes = 10000;
 		constexpr std::uint64_t kMaximumConnections = 20000;
 		constexpr std::uint64_t kMaximumRoutePoints = 1000;
-		constexpr std::size_t kMaximumLabelBytes = 64 * 1024;
 		constexpr int kMaximumCoordinate = 10000000;
 		constexpr int kMaximumNodeDimension = 100000;
 
@@ -66,6 +69,54 @@ namespace arteststudio::infrastructure
 		{
 			const std::wstring extension = path.extension().native();
 			return _wcsicmp(extension.c_str(), kDiagramFileExtension.data()) == 0;
+		}
+
+		[[nodiscard]] bool ExceedsMaximumFileSize(std::ostringstream& output) noexcept
+		{
+			const std::streampos position = output.tellp();
+			return position < 0 ||
+				static_cast<std::uintmax_t>(position) > DiagramStorageLimits::MaximumFileBytes;
+		}
+
+		enum class QuotedReadResult
+		{
+			Success,
+			Invalid,
+			LimitExceeded
+		};
+
+		[[nodiscard]] QuotedReadResult ReadBoundedQuotedString(
+			std::istream& input,
+			std::string& output,
+			std::size_t maximumBytes)
+		{
+			output.clear();
+			input >> std::ws;
+
+			char character = 0;
+			if (!input.get(character) || character != '"')
+			{
+				return QuotedReadResult::Invalid;
+			}
+
+			while (input.get(character))
+			{
+				if (character == '"')
+				{
+					return QuotedReadResult::Success;
+				}
+				if (character == '\\' && !input.get(character))
+				{
+					return QuotedReadResult::Invalid;
+				}
+				if (output.size() >= maximumBytes)
+				{
+					return QuotedReadResult::LimitExceeded;
+				}
+				output.push_back(character);
+			}
+
+			return QuotedReadResult::Invalid;
 		}
 
 		[[nodiscard]] std::wstring DescribeSnapshotFailure(const RestoreSnapshotResult& result)
@@ -213,6 +264,10 @@ namespace arteststudio::infrastructure
 			{
 				return Failure(StorageError::InvalidData, DescribeSnapshotFailure(validation));
 			}
+			if (snapshot.nodes.size() > kMaximumNodes || snapshot.connections.size() > kMaximumConnections)
+			{
+				return Failure(StorageError::DataLimitExceeded, L"El diagrama contiene demasiados elementos.");
+			}
 
 			std::ostringstream output;
 			output.imbue(std::locale::classic());
@@ -234,14 +289,18 @@ namespace arteststudio::infrastructure
 				{
 					return conversion;
 				}
-				if (label.size() > kMaximumLabelBytes)
+				if (label.size() > DiagramStorageLimits::MaximumLabelBytes)
 				{
-					return Failure(StorageError::InvalidData, L"Una etiqueta excede el tamano permitido.");
+					return Failure(StorageError::DataLimitExceeded, L"Una etiqueta excede el limite de 64 KB.");
 				}
 
 				output << "NODE " << node.id.value << ' ' << static_cast<int>(node.kind) << ' '
 					<< node.position.x << ' ' << node.position.y << ' '
 					<< node.width << ' ' << node.height << ' ' << std::quoted(label) << '\n';
+				if (ExceedsMaximumFileSize(output))
+				{
+					return Failure(StorageError::FileTooLarge, L"El contenido serializado excede 16 MB.");
+				}
 			}
 
 			output << "CONNECTIONS " << snapshot.connections.size() << '\n';
@@ -269,12 +328,20 @@ namespace arteststudio::infrastructure
 					output << ' ' << point.x << ' ' << point.y;
 				}
 				output << '\n';
+				if (ExceedsMaximumFileSize(output))
+				{
+					return Failure(StorageError::FileTooLarge, L"El contenido serializado excede 16 MB.");
+				}
 			}
 
 			output << "END\n";
 			if (!output)
 			{
 				return Failure(StorageError::IoFailure, L"No se pudo generar el contenido del documento.");
+			}
+			if (ExceedsMaximumFileSize(output))
+			{
+				return Failure(StorageError::FileTooLarge, L"El contenido serializado excede 16 MB.");
 			}
 
 			serialized = output.str();
@@ -312,14 +379,24 @@ namespace arteststudio::infrastructure
 				int width = 0;
 				int height = 0;
 				std::string labelBytes;
-				if (!(input >> token >> storedId >> kind >> x >> y >> width >> height >> std::quoted(labelBytes)) ||
+				if (!(input >> token >> storedId >> kind >> x >> y >> width >> height) ||
 					token != "NODE" ||
 					(kind != static_cast<int>(NodeKind::Rectangle) && kind != static_cast<int>(NodeKind::Diamond)) ||
 					!IsCoordinateValid(x) || !IsCoordinateValid(y) ||
-					!IsDimensionValid(width) || !IsDimensionValid(height) ||
-					labelBytes.size() > kMaximumLabelBytes)
+					!IsDimensionValid(width) || !IsDimensionValid(height))
 				{
 					return Failure(StorageError::InvalidData, L"Se encontro un bloque invalido.");
+				}
+
+				const QuotedReadResult labelRead = ReadBoundedQuotedString(
+					input, labelBytes, DiagramStorageLimits::MaximumLabelBytes);
+				if (labelRead == QuotedReadResult::LimitExceeded)
+				{
+					return Failure(StorageError::DataLimitExceeded, L"Una etiqueta excede el limite de 64 KB.");
+				}
+				if (labelRead != QuotedReadResult::Success)
+				{
+					return Failure(StorageError::InvalidData, L"La etiqueta de un bloque esta truncada o es invalida.");
 				}
 
 				std::wstring label;
@@ -396,18 +473,39 @@ namespace arteststudio::infrastructure
 			return {};
 		}
 
-		[[nodiscard]] StorageError MapWindowsError(DWORD error) noexcept
+		[[nodiscard]] StorageResult MapAtomicWriteFailure(const AtomicWriteResult& result)
 		{
-			if (error == ERROR_ACCESS_DENIED || error == ERROR_SHARING_VIOLATION)
+			switch (result.error)
 			{
-				return StorageError::AccessDenied;
+			case AtomicWriteError::None:
+				return {};
+			case AtomicWriteError::InvalidPath:
+				return Failure(StorageError::InvalidPath, result.detail);
+			case AtomicWriteError::AccessDenied:
+				return Failure(StorageError::AccessDenied, result.detail);
+			case AtomicWriteError::TemporaryCleanupFailure:
+			case AtomicWriteError::TemporaryWriteFailure:
+				return Failure(StorageError::TemporaryFileFailure, result.detail);
+			case AtomicWriteError::ReplacementFailure:
+				return Failure(StorageError::ReplacementFailure, result.detail);
 			}
-			if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
-			{
-				return StorageError::FileNotFound;
-			}
-			return StorageError::IoFailure;
+
+			return Failure(StorageError::IoFailure, result.detail);
 		}
+	}
+
+	TextDiagramStorage::TextDiagramStorage() noexcept
+		: m_writer([]() -> const application::IAtomicFileWriter*
+			{
+				static const WindowsAtomicFileWriter writer;
+				return &writer;
+			}())
+	{
+	}
+
+	TextDiagramStorage::TextDiagramStorage(const application::IAtomicFileWriter& writer) noexcept
+		: m_writer(&writer)
+	{
 	}
 
 	application::StorageResult TextDiagramStorage::Load(
@@ -434,6 +532,17 @@ namespace arteststudio::infrastructure
 			if (!exists)
 			{
 				return Failure(StorageError::FileNotFound);
+			}
+
+			std::error_code sizeError;
+			const std::uintmax_t fileSize = std::filesystem::file_size(path, sizeError);
+			if (sizeError)
+			{
+				return Failure(StorageError::IoFailure, L"No se pudo determinar el tamano del archivo.");
+			}
+			if (fileSize > DiagramStorageLimits::MaximumFileBytes)
+			{
+				return Failure(StorageError::FileTooLarge, L"Tamano detectado: " + std::to_wstring(fileSize) + L" bytes.");
 			}
 
 			std::ifstream input(path, std::ios::binary);
@@ -480,38 +589,7 @@ namespace arteststudio::infrastructure
 				return serialization;
 			}
 
-			std::filesystem::path temporaryPath = path;
-			temporaryPath += L".tmp";
-			std::error_code cleanupError;
-			std::filesystem::remove(temporaryPath, cleanupError);
-
-			{
-				std::ofstream output(temporaryPath, std::ios::binary | std::ios::trunc);
-				if (!output)
-				{
-					return Failure(StorageError::AccessDenied, L"No se pudo crear el archivo temporal.");
-				}
-				output.write(serialized.data(), static_cast<std::streamsize>(serialized.size()));
-				output.flush();
-				if (!output)
-				{
-					output.close();
-					std::filesystem::remove(temporaryPath, cleanupError);
-					return Failure(StorageError::IoFailure, L"No se pudo escribir completamente el archivo temporal.");
-				}
-			}
-
-			if (!MoveFileExW(
-				temporaryPath.c_str(),
-				path.c_str(),
-				MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-			{
-				const DWORD error = GetLastError();
-				std::filesystem::remove(temporaryPath, cleanupError);
-				return Failure(MapWindowsError(error), L"Windows reporto el codigo " + std::to_wstring(error) + L".");
-			}
-
-			return {};
+			return MapAtomicWriteFailure(m_writer->Write(path, serialized));
 		}
 		catch (const std::bad_alloc&)
 		{

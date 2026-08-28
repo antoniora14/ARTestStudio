@@ -45,6 +45,19 @@ El guardado tambien es transaccional: se genera y escribe un archivo temporal en
 el mismo directorio y Windows reemplaza el destino al completar correctamente la
 escritura. Un fallo no debe dejar un documento parcialmente escrito.
 
+`IAtomicFileWriter` separa la politica de persistencia del mecanismo de reemplazo.
+`WindowsAtomicFileWriter` limpia temporales `.tmp` obsoletos, fuerza la escritura
+del temporal a disco y solo entonces reemplaza el destino. El contrato podra
+reutilizarse en el futuro formato `.atprj` y permite simular fallos de escritura
+sin depender del sistema de archivos.
+
+Los archivos `.atd` tienen un limite de 16 MB y cada etiqueta UTF-8 un limite de
+64 KB. El tamano total se verifica antes de analizar el contenido y tambien
+durante la serializacion. Las cadenas entre comillas se leen de forma acotada, de
+modo que un archivo hostil no puede forzar una asignacion proporcional a todo su
+contenido. Los fallos de temporal y de reemplazo se reportan por separado; si el
+reemplazo falla, el documento anterior permanece intacto.
+
 ## Manejo de fallos
 
 Las operaciones esperadas no lanzan excepciones a la interfaz. Devuelven
@@ -69,4 +82,6 @@ propio reporter se absorbe para no ocultar ni agravar el error original.
 El proyecto `ARTestStudio.Tests` prueba el dominio y la infraestructura sin abrir
 la interfaz MFC. Las pruebas de persistencia cubren round-trip de datos y UTF-8,
 archivos corruptos, referencias inexistentes, versiones incompatibles y archivos
-no encontrados.
+no encontrados. Tambien verifican limites de archivo y etiqueta, documentos
+truncados, limpieza de temporales obsoletos y preservacion del archivo anterior
+cuando una escritura o reemplazo falla.

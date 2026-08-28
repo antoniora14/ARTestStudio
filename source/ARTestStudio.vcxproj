@@ -206,9 +206,11 @@
     <ClInclude Include="Domain\DiagramModel.h" />
     <ClInclude Include="Domain\DiagramGeometry.h" />
     <ClInclude Include="Domain\OrthogonalRouter.h" />
+    <ClInclude Include="Application\AtomicFileWriter.h" />
     <ClInclude Include="Application\DiagramStorage.h" />
     <ClInclude Include="Application\FaultService.h" />
     <ClInclude Include="Infrastructure\TextDiagramStorage.h" />
+    <ClInclude Include="Infrastructure\WindowsAtomicFileWriter.h" />
     <ClInclude Include="Infrastructure\FileFaultReporter.h" />
   </ItemGroup>
   <ItemGroup>
@@ -241,6 +243,9 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Infrastructure\TextDiagramStorage.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\WindowsAtomicFileWriter.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Application\FaultService.cpp">

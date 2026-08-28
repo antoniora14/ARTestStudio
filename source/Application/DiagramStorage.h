@@ -2,6 +2,8 @@
 
 #include "../Domain/DiagramModel.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -10,6 +12,12 @@ namespace arteststudio::application
 {
 	inline constexpr std::wstring_view kDiagramFileExtension = L".atd";
 	inline constexpr std::wstring_view kProjectFileExtension = L".atprj";
+
+	struct DiagramStorageLimits
+	{
+		static constexpr std::uintmax_t MaximumFileBytes = 16ULL * 1024ULL * 1024ULL;
+		static constexpr std::size_t MaximumLabelBytes = 64ULL * 1024ULL;
+	};
 
 	enum class StorageError
 	{
@@ -22,7 +30,11 @@ namespace arteststudio::application
 		InvalidFormat,
 		UnsupportedVersion,
 		InvalidData,
-		InvalidEncoding
+		InvalidEncoding,
+		FileTooLarge,
+		DataLimitExceeded,
+		TemporaryFileFailure,
+		ReplacementFailure
 	};
 
 	struct StorageResult
@@ -60,6 +72,14 @@ namespace arteststudio::application
 			return L"El archivo contiene datos de diagrama invalidos.";
 		case StorageError::InvalidEncoding:
 			return L"El archivo contiene texto que no es UTF-8 valido.";
+		case StorageError::FileTooLarge:
+			return L"El archivo excede el limite permitido de 16 MB.";
+		case StorageError::DataLimitExceeded:
+			return L"El diagrama excede uno de los limites de seguridad permitidos.";
+		case StorageError::TemporaryFileFailure:
+			return L"No se pudo preparar o escribir el archivo temporal de guardado.";
+		case StorageError::ReplacementFailure:
+			return L"No se pudo reemplazar el documento anterior; su contenido se conservo.";
 		}
 
 		return L"Ocurrio un error desconocido.";

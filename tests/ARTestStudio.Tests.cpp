@@ -1,6 +1,8 @@
 #include "Domain/DiagramModel.h"
 #include "Domain/DiagramGeometry.h"
 #include "Domain/OrthogonalRouter.h"
+#include "Application/AtomicFileWriter.h"
+#include "Application/DiagramStorage.h"
 #include "Application/FaultService.h"
 #include "Infrastructure/FileFaultReporter.h"
 #include "Infrastructure/TextDiagramStorage.h"
@@ -23,6 +25,10 @@
 namespace
 {
 	using namespace arteststudio::domain;
+	using arteststudio::application::AtomicWriteError;
+	using arteststudio::application::AtomicWriteResult;
+	using arteststudio::application::DiagramStorageLimits;
+	using arteststudio::application::IAtomicFileWriter;
 	using arteststudio::application::StorageError;
 	using arteststudio::application::StorageResult;
 	using arteststudio::application::Fault;
@@ -111,6 +117,40 @@ namespace
 		std::wstring lastCode;
 		std::wstring lastOperation;
 	};
+
+	class FailingAtomicFileWriter final : public IAtomicFileWriter
+	{
+	public:
+		explicit FailingAtomicFileWriter(AtomicWriteError error)
+			: m_error(error)
+		{
+		}
+
+		[[nodiscard]] AtomicWriteResult Write(
+			const std::filesystem::path& destination,
+			std::string_view content) const noexcept override
+		{
+			++calls;
+			lastDestination = destination;
+			lastContentSize = content.size();
+			return {m_error, L"Fallo simulado por la prueba."};
+		}
+
+		mutable int calls = 0;
+		mutable std::filesystem::path lastDestination;
+		mutable std::size_t lastContentSize = 0;
+
+	private:
+		AtomicWriteError m_error;
+	};
+
+	[[nodiscard]] std::string ReadFileContents(const std::filesystem::path& path)
+	{
+		std::ifstream input(path, std::ios::binary);
+		return {
+			std::istreambuf_iterator<char>{input},
+			std::istreambuf_iterator<char>{}};
+	}
 
 	class ThrowingFaultReporter final : public IFaultReporter
 	{
@@ -615,6 +655,160 @@ namespace
 			"Loading a non-.atd path must report the extension error before accessing the file.");
 	}
 
+	void RejectsOversizedDiagramFilesBeforeParsing()
+	{
+		TemporaryDiagramFile file;
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output.seekp(static_cast<std::streamoff>(DiagramStorageLimits::MaximumFileBytes));
+			output.put('\0');
+		}
+
+		DiagramModel existing;
+		const NodeId original = existing.AddNode(NodeKind::Rectangle, {10, 10}, L"Preserve");
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Load(file.Path(), existing);
+
+		Require(result.error == StorageError::FileTooLarge,
+			"Files larger than 16 MB must be rejected before parsing.");
+		Require(existing.Nodes().size() == 1 && existing.FindNode(original) != nullptr,
+			"An oversized file must not replace the active diagram.");
+	}
+
+	void RejectsOversizedLabelsWithBoundedParsing()
+	{
+		TemporaryDiagramFile file;
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output << "ARTESTSTUDIO_DIAGRAM 1\nNODES 1\nNODE 1 0 0 0 150 100 \"";
+			const std::string oversizedLabel(DiagramStorageLimits::MaximumLabelBytes + 1, 'A');
+			output.write(oversizedLabel.data(), static_cast<std::streamsize>(oversizedLabel.size()));
+			output << "\"\nCONNECTIONS 0\nEND\n";
+		}
+
+		DiagramModel existing;
+		const NodeId original = existing.AddNode(NodeKind::Diamond, {20, 20}, L"Preserve");
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Load(file.Path(), existing);
+
+		Require(result.error == StorageError::DataLimitExceeded,
+			"Labels larger than 64 KB must have a specific limit error.");
+		Require(existing.Nodes().size() == 1 && existing.FindNode(original) != nullptr,
+			"An oversized label must not replace the active diagram.");
+	}
+
+	void RejectsTruncatedLabelsAtomically()
+	{
+		TemporaryDiagramFile file;
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output << "ARTESTSTUDIO_DIAGRAM 1\n"
+				<< "NODES 1\n"
+				<< "NODE 1 0 0 0 150 100 \"unterminated";
+		}
+
+		DiagramModel existing;
+		const NodeId original = existing.AddNode(NodeKind::Rectangle, {30, 30}, L"Preserve");
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Load(file.Path(), existing);
+
+		Require(result.error == StorageError::InvalidData,
+			"A truncated quoted label must be rejected as invalid data.");
+		Require(existing.Nodes().size() == 1 && existing.FindNode(original) != nullptr,
+			"A truncated file must not replace the active diagram.");
+	}
+
+	void RemovesStaleTemporaryFilesOnSuccessfulSave()
+	{
+		TemporaryDiagramFile file;
+		std::filesystem::path temporaryPath = file.Path();
+		temporaryPath += L".tmp";
+		{
+			std::ofstream output(temporaryPath, std::ios::binary | std::ios::trunc);
+			output << "stale temporary data";
+		}
+
+		DiagramModel diagram;
+		(void)diagram.AddNode(NodeKind::Rectangle, {40, 40}, L"Saved after cleanup");
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Save(file.Path(), diagram);
+
+		Require(static_cast<bool>(result), "A stale temporary file must not block a valid save.");
+		Require(!std::filesystem::exists(temporaryPath),
+			"The stale temporary file must be removed after a successful save.");
+		DiagramModel restored;
+		Require(static_cast<bool>(storage.Load(file.Path(), restored)),
+			"The destination written after cleanup must remain loadable.");
+	}
+
+	void FailedReplacementPreservesThePreviousDocument()
+	{
+		TemporaryDiagramFile file;
+		DiagramModel baseline;
+		(void)baseline.AddNode(NodeKind::Rectangle, {50, 50}, L"Original content");
+		const TextDiagramStorage realStorage;
+		Require(static_cast<bool>(realStorage.Save(file.Path(), baseline)),
+			"The baseline document must be saved before simulating failure.");
+		const std::string originalContents = ReadFileContents(file.Path());
+
+		DiagramModel modified;
+		(void)modified.AddNode(NodeKind::Diamond, {60, 60}, L"Replacement content");
+		FailingAtomicFileWriter failingWriter{AtomicWriteError::ReplacementFailure};
+		const TextDiagramStorage failingStorage{failingWriter};
+		const StorageResult result = failingStorage.Save(file.Path(), modified);
+
+		Require(result.error == StorageError::ReplacementFailure,
+			"Replacement failures must be reported specifically.");
+		Require(failingWriter.calls == 1 && failingWriter.lastDestination == file.Path(),
+			"The diagram storage must delegate one atomic replacement attempt.");
+		Require(ReadFileContents(file.Path()) == originalContents,
+			"A failed replacement must not alter the previous document.");
+	}
+
+	void ReportsTemporaryWriteFailuresSpecifically()
+	{
+		TemporaryDiagramFile file;
+		DiagramModel diagram;
+		(void)diagram.AddNode(NodeKind::Rectangle, {70, 70}, L"Temporary failure");
+		FailingAtomicFileWriter failingWriter{AtomicWriteError::TemporaryWriteFailure};
+		const TextDiagramStorage storage{failingWriter};
+		const StorageResult result = storage.Save(file.Path(), diagram);
+
+		Require(result.error == StorageError::TemporaryFileFailure,
+			"Temporary write failures must not be collapsed into a generic IO error.");
+		Require(!std::filesystem::exists(file.Path()),
+			"A temporary write failure must not create the destination document.");
+	}
+
+	void OversizedSavePreservesThePreviousDocument()
+	{
+		TemporaryDiagramFile file;
+		DiagramModel baseline;
+		(void)baseline.AddNode(NodeKind::Rectangle, {80, 80}, L"Baseline");
+		const TextDiagramStorage storage;
+		Require(static_cast<bool>(storage.Save(file.Path(), baseline)),
+			"The baseline document must be saved before the size-limit test.");
+		const std::string originalContents = ReadFileContents(file.Path());
+
+		DiagramModel oversized;
+		const std::wstring maximumLabel(DiagramStorageLimits::MaximumLabelBytes, L'X');
+		for (int index = 0; index < 256; ++index)
+		{
+			(void)oversized.AddNode(
+				NodeKind::Rectangle,
+				{index * 10, index * 10},
+				150,
+				100,
+				maximumLabel);
+		}
+
+		const StorageResult result = storage.Save(file.Path(), oversized);
+		Require(result.error == StorageError::FileTooLarge,
+			"Serialized diagrams larger than 16 MB must be rejected.");
+		Require(ReadFileContents(file.Path()) == originalContents,
+			"A size-limit failure must preserve the previous document byte for byte.");
+	}
+
 	void RoutesFaultsThroughTheConfiguredReporter()
 	{
 		RecordingFaultReporter reporter;
@@ -726,6 +920,13 @@ int main()
 		{"rejects unsupported file versions", RejectsUnsupportedFileVersions},
 		{"reports missing diagram files", ReportsMissingDiagramFiles},
 		{"rejects non-diagram file extensions", RejectsNonDiagramFileExtensions},
+		{"rejects oversized diagram files before parsing", RejectsOversizedDiagramFilesBeforeParsing},
+		{"rejects oversized labels with bounded parsing", RejectsOversizedLabelsWithBoundedParsing},
+		{"rejects truncated labels atomically", RejectsTruncatedLabelsAtomically},
+		{"removes stale temporary files on successful save", RemovesStaleTemporaryFilesOnSuccessfulSave},
+		{"failed replacement preserves the previous document", FailedReplacementPreservesThePreviousDocument},
+		{"reports temporary write failures specifically", ReportsTemporaryWriteFailuresSpecifically},
+		{"oversized save preserves the previous document", OversizedSavePreservesThePreviousDocument},
 		{"routes faults through the configured reporter", RoutesFaultsThroughTheConfiguredReporter},
 		{"writes structured fault logs", WritesStructuredFaultLogs},
 		{"fault reporting failures never escape", FaultReportingFailuresNeverEscape},
