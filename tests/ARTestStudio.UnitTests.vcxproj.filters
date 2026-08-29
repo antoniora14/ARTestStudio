@@ -29,6 +29,9 @@
     <ClCompile Include="Application\FaultServiceTests.cpp">
       <Filter>Application</Filter>
     </ClCompile>
+    <ClCompile Include="Application\InteractionControllerTests.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
     <ClCompile Include="Domain\DiagramModelTests.cpp">
       <Filter>Domain</Filter>
     </ClCompile>
@@ -47,6 +50,9 @@
     <ClCompile Include="..\source\Domain\DiagramGeometry.cpp">
       <Filter>Production Sources</Filter>
     </ClCompile>
+    <ClCompile Include="..\source\Domain\DiagramHitTesting.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
     <ClCompile Include="..\source\Domain\OrthogonalRouter.cpp">
       <Filter>Production Sources</Filter>
     </ClCompile>
@@ -57,6 +63,12 @@
       <Filter>Production Sources</Filter>
     </ClCompile>
     <ClCompile Include="..\source\Application\FaultService.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Application\EditCommand.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Application\InteractionController.cpp">
       <Filter>Production Sources</Filter>
     </ClCompile>
     <ClCompile Include="..\source\Infrastructure\FileFaultReporter.cpp">

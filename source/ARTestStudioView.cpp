@@ -9,10 +9,9 @@
 
 #include "ARTestStudioDoc.h"
 #include "ARTestStudioView.h"
+#include "Application/InteractionController.h"
 #include "Domain/DiagramGeometry.h"
-#include "Domain/OrthogonalRouter.h"
 
-#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -20,23 +19,19 @@
 #define new DEBUG_NEW
 #endif
 
+using arteststudio::application::InteractionController;
+using arteststudio::application::SelectionModel;
 using arteststudio::domain::Connection;
 using arteststudio::domain::ConnectionEndpoint;
-using arteststudio::domain::ConnectionId;
-using arteststudio::domain::DiagramError;
 using arteststudio::domain::DiagramModel;
 using arteststudio::domain::Node;
-using arteststudio::domain::NodeId;
 using arteststudio::domain::NodeKind;
-using arteststudio::domain::OrthogonalRouter;
 using arteststudio::domain::Point;
 using arteststudio::domain::PortId;
 
 namespace
 {
 	constexpr int ConnectionPointCount = 4;
-	constexpr int ConnectionHitRadius = 5;
-	constexpr int ConnectionLineTolerance = 6;
 
 	void MarkDiagramChanged(CARTestStudioDoc& document)
 	{
@@ -80,30 +75,13 @@ namespace
 		return true;
 	}
 
-	bool HitTestNode(const Node& node, CPoint point)
-	{
-		const CRect bounds = GetMfcNodeBounds(node);
-		if (node.kind != NodeKind::Diamond)
-		{
-			return bounds.PtInRect(point) == TRUE;
-		}
-
-		const double halfWidth = static_cast<double>(node.width) / 2.0;
-		const double halfHeight = static_cast<double>(node.height) / 2.0;
-		if (halfWidth <= 0.0 || halfHeight <= 0.0)
-		{
-			return false;
-		}
-
-		const double normalizedX = std::abs(point.x - node.position.x) / halfWidth;
-		const double normalizedY = std::abs(point.y - node.position.y) / halfHeight;
-		return normalizedX + normalizedY <= 1.0;
-	}
-
-	void DrawNode(CDC* deviceContext, const Node& node)
+	void DrawNode(CDC* deviceContext, const Node& node, bool selected)
 	{
 		CBrush fillBrush(RGB(200, 200, 255));
-		CPen borderPen(PS_SOLID, 1, RGB(0, 0, 0));
+		CPen borderPen(
+			PS_SOLID,
+			selected ? 2 : 1,
+			selected ? RGB(35, 105, 190) : RGB(0, 0, 0));
 		CBrush* oldBrush = deviceContext->SelectObject(&fillBrush);
 		CPen* oldPen = deviceContext->SelectObject(&borderPen);
 		const CRect bounds = GetMfcNodeBounds(node);
@@ -172,7 +150,11 @@ namespace
 		deviceContext->SelectObject(oldPen);
 	}
 
-	void DrawConnection(CDC* deviceContext, const DiagramModel& diagram, const Connection& connection)
+	void DrawConnection(
+		CDC* deviceContext,
+		const DiagramModel& diagram,
+		const Connection& connection,
+		bool selected)
 	{
 		CPoint start;
 		CPoint end;
@@ -182,7 +164,10 @@ namespace
 			return;
 		}
 
-		CPen pen(PS_SOLID, 1, RGB(0, 0, 0));
+		CPen pen(
+			PS_SOLID,
+			selected ? 2 : 1,
+			selected ? RGB(35, 105, 190) : RGB(0, 0, 0));
 		CPen* oldPen = deviceContext->SelectObject(&pen);
 		std::vector<CPoint> points{start};
 		points.reserve(connection.intermediatePoints.size() + 2);
@@ -200,99 +185,6 @@ namespace
 
 		DrawArrowHead(deviceContext, points[points.size() - 2], end);
 		deviceContext->SelectObject(oldPen);
-	}
-
-	double DistancePointToSegment(CPoint point, CPoint start, CPoint end)
-	{
-		const double dx = static_cast<double>(end.x - start.x);
-		const double dy = static_cast<double>(end.y - start.y);
-		if (dx == 0.0 && dy == 0.0)
-		{
-			return std::hypot(
-				static_cast<double>(point.x - start.x),
-				static_cast<double>(point.y - start.y));
-		}
-
-		const double projection = std::clamp(
-			((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy),
-			0.0,
-			1.0);
-		const double projectedX = start.x + projection * dx;
-		const double projectedY = start.y + projection * dy;
-		return std::hypot(point.x - projectedX, point.y - projectedY);
-	}
-
-	bool HitTestConnection(const DiagramModel& diagram, const Connection& connection, CPoint point)
-	{
-		CPoint start;
-		CPoint end;
-		if (!TryGetConnectionPoint(diagram, connection.from, start) ||
-			!TryGetConnectionPoint(diagram, connection.to, end))
-		{
-			return false;
-		}
-
-		CPoint segmentStart = start;
-		for (const Point intermediate : connection.intermediatePoints)
-		{
-			const CPoint segmentEnd = ToMfcPoint(intermediate);
-			if (DistancePointToSegment(point, segmentStart, segmentEnd) <= ConnectionLineTolerance)
-			{
-				return true;
-			}
-			segmentStart = segmentEnd;
-		}
-
-		return DistancePointToSegment(point, segmentStart, end) <= ConnectionLineTolerance;
-	}
-
-	struct PortHit
-	{
-		NodeId nodeId;
-		PortId portId = PortId::Top;
-		CPoint point;
-	};
-
-	std::optional<PortHit> FindPortAt(const DiagramModel& diagram, CPoint point)
-	{
-		for (const Node& node : diagram.Nodes())
-		{
-			for (int index = 0; index < ConnectionPointCount; ++index)
-			{
-				const PortId portId = static_cast<PortId>(index);
-				const CPoint connectionPoint = GetMfcConnectionPoint(node, portId);
-				if (std::abs(connectionPoint.x - point.x) <= ConnectionHitRadius &&
-					std::abs(connectionPoint.y - point.y) <= ConnectionHitRadius)
-				{
-					return PortHit{node.id, portId, connectionPoint};
-				}
-			}
-		}
-		return std::nullopt;
-	}
-
-	std::optional<NodeId> FindNodeAt(const DiagramModel& diagram, CPoint point)
-	{
-		for (auto node = diagram.Nodes().crbegin(); node != diagram.Nodes().crend(); ++node)
-		{
-			if (HitTestNode(*node, point))
-			{
-				return node->id;
-			}
-		}
-		return std::nullopt;
-	}
-
-	std::optional<ConnectionId> FindConnectionAt(const DiagramModel& diagram, CPoint point)
-	{
-		for (const Connection& connection : diagram.Connections())
-		{
-			if (HitTestConnection(diagram, connection, point))
-			{
-				return connection.id;
-			}
-		}
-		return std::nullopt;
 	}
 }
 
@@ -314,6 +206,14 @@ BEGIN_MESSAGE_MAP(CARTestStudioView, CView)
 	ON_COMMAND(ID_EDIT_CUT, &CARTestStudioView::OnEditCut)
 	ON_COMMAND(ID_EDIT_PASTE, &CARTestStudioView::OnEditPaste)
 	ON_COMMAND(ID_EDIT_DELETE, &CARTestStudioView::OnEditDelete)
+	ON_COMMAND(ID_EDIT_UNDO, &CARTestStudioView::OnEditUndo)
+	ON_COMMAND(ID_EDIT_REDO, &CARTestStudioView::OnEditRedo)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_COPY, &CARTestStudioView::OnUpdateEditCopy)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_CUT, &CARTestStudioView::OnUpdateEditCut)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_PASTE, &CARTestStudioView::OnUpdateEditPaste)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_DELETE, &CARTestStudioView::OnUpdateEditDelete)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_UNDO, &CARTestStudioView::OnUpdateEditUndo)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_REDO, &CARTestStudioView::OnUpdateEditRedo)
 END_MESSAGE_MAP()
 
 CARTestStudioView::CARTestStudioView() = default;
@@ -344,27 +244,27 @@ void CARTestStudioView::OnDraw(CDC* deviceContext)
 	}
 
 	const DiagramModel& diagram = document->GetDiagram();
+	const SelectionModel& selection = document->GetInteractionController().Selection();
 	for (const Node& node : diagram.Nodes())
 	{
-		DrawNode(drawingContext, node);
+		DrawNode(drawingContext, node, selection.IsSelected(node.id));
 	}
 
 	for (const Connection& connection : diagram.Connections())
 	{
-		DrawConnection(drawingContext, diagram, connection);
+		DrawConnection(drawingContext, diagram, connection, selection.IsSelected(connection.id));
 	}
 
-	if (m_drawingLine && m_startNodeId.has_value())
+	const InteractionController& controller = document->GetInteractionController();
+	const auto previewStart = controller.ConnectionPreviewStart();
+	const auto previewEnd = controller.ConnectionPreviewEnd();
+	if (previewStart.has_value() && previewEnd.has_value())
 	{
-		const Node* startNode = diagram.FindNode(*m_startNodeId);
-		if (startNode != nullptr)
-		{
-			DrawArrow(
-				drawingContext,
-				GetMfcConnectionPoint(*startNode, m_startPortId),
-				m_tempEndPoint,
-				RGB(70, 100, 160));
-		}
+		DrawArrow(
+			drawingContext,
+			ToMfcPoint(*previewStart),
+			ToMfcPoint(*previewEnd),
+			RGB(70, 100, 160));
 	}
 
 #ifdef _DEBUG
@@ -395,23 +295,15 @@ void CARTestStudioView::OnDraw(CDC* deviceContext)
 void CARTestStudioView::OnMouseMove(UINT flags, CPoint point)
 {
 	CARTestStudioDoc* document = GetDocument();
-	DiagramModel& diagram = document->GetDiagram();
-
-	if (m_drawingLine)
+	InteractionController& controller = document->GetInteractionController();
+	const bool wasActive = controller.IsPointerActionActive();
+	if (controller.UpdatePrimaryAction(ToDomainPoint(point)))
 	{
-		m_tempEndPoint = point;
-		Invalidate(FALSE);
+		MarkDiagramChanged(*document);
 	}
-	else if (m_draggingNodeId.has_value())
+	else if (wasActive)
 	{
-		const int dx = point.x - m_lastMousePoint.x;
-		const int dy = point.y - m_lastMousePoint.y;
-		m_lastMousePoint = point;
-		if (diagram.MoveNodeBy(*m_draggingNodeId, dx, dy) == DiagramError::None)
-		{
-			OrthogonalRouter::RouteAll(diagram);
-			MarkDiagramChanged(*document);
-		}
+		Invalidate(FALSE);
 	}
 
 #ifdef _DEBUG
@@ -424,142 +316,120 @@ void CARTestStudioView::OnMouseMove(UINT flags, CPoint point)
 
 void CARTestStudioView::OnLButtonDown(UINT flags, CPoint point)
 {
-	DiagramModel& diagram = GetDocument()->GetDiagram();
-	if (const std::optional<PortHit> port = FindPortAt(diagram, point); port.has_value())
+	InteractionController& controller = GetDocument()->GetInteractionController();
+	controller.BeginPrimaryAction(ToDomainPoint(point));
+	if (controller.IsPointerActionActive())
 	{
-		m_drawingLine = true;
-		m_startNodeId = port->nodeId;
-		m_startPortId = port->portId;
-		m_tempEndPoint = port->point;
 		SetCapture();
-		Invalidate(FALSE);
-		return;
 	}
-
-	if (const std::optional<NodeId> nodeId = FindNodeAt(diagram, point); nodeId.has_value())
-	{
-		m_draggingNodeId = nodeId;
-		m_lastMousePoint = point;
-		SetCapture();
-		return;
-	}
-
+	Invalidate(FALSE);
 	CView::OnLButtonDown(flags, point);
 }
 
 void CARTestStudioView::OnLButtonUp(UINT flags, CPoint point)
 {
 	CARTestStudioDoc* document = GetDocument();
-	DiagramModel& diagram = document->GetDiagram();
-
-	if (m_drawingLine && m_startNodeId.has_value())
+	if (document->GetInteractionController().EndPrimaryAction(ToDomainPoint(point)))
 	{
-		if (const std::optional<PortHit> target = FindPortAt(diagram, point); target.has_value())
-		{
-			const auto added = diagram.AddConnection(
-				{*m_startNodeId, m_startPortId},
-				{target->nodeId, target->portId});
-			if (added)
-			{
-				(void)OrthogonalRouter::RouteConnection(diagram, added.connectionId);
-				MarkDiagramChanged(*document);
-			}
-		}
-
-		m_drawingLine = false;
-		m_startNodeId.reset();
+		MarkDiagramChanged(*document);
+	}
+	else
+	{
 		Invalidate(FALSE);
 	}
 
-	m_draggingNodeId.reset();
 	if (GetCapture() == this)
 	{
 		ReleaseCapture();
 	}
-
 	CView::OnLButtonUp(flags, point);
 }
 
 void CARTestStudioView::OnRButtonDown(UINT flags, CPoint point)
 {
-	const DiagramModel& diagram = GetDocument()->GetDiagram();
-	m_lastRightClickPoint = point;
-	m_rightClickNodeId = FindNodeAt(diagram, point);
-	m_rightClickConnectionId.reset();
-	if (!m_rightClickNodeId.has_value())
-	{
-		m_rightClickConnectionId = FindConnectionAt(diagram, point);
-	}
-
+	GetDocument()->GetInteractionController().SelectAt(ToDomainPoint(point));
+	Invalidate(FALSE);
 	CView::OnRButtonDown(flags, point);
 }
 
 void CARTestStudioView::OnEditCopy()
 {
-	if (!m_rightClickNodeId.has_value())
-	{
-		return;
-	}
-
-	const Node* node = GetDocument()->GetDiagram().FindNode(*m_rightClickNodeId);
-	if (node != nullptr)
-	{
-		m_clipboardNode = *node;
-	}
+	(void)GetDocument()->GetInteractionController().CopySelection();
 }
 
 void CARTestStudioView::OnEditCut()
 {
-	OnEditCopy();
-	OnEditDelete();
+	CARTestStudioDoc* document = GetDocument();
+	if (document->GetInteractionController().CutSelection())
+	{
+		MarkDiagramChanged(*document);
+	}
 }
 
 void CARTestStudioView::OnEditPaste()
 {
-	if (!m_clipboardNode.has_value())
-	{
-		return;
-	}
-
 	CARTestStudioDoc* document = GetDocument();
-	const Node& copied = *m_clipboardNode;
-	(void)document->GetDiagram().AddNode(
-		copied.kind,
-		ToDomainPoint(m_lastRightClickPoint),
-		copied.width,
-		copied.height,
-		copied.label);
-	OrthogonalRouter::RouteAll(document->GetDiagram());
-	MarkDiagramChanged(*document);
+	if (document->GetInteractionController().Paste())
+	{
+		MarkDiagramChanged(*document);
+	}
 }
 
 void CARTestStudioView::OnEditDelete()
 {
 	CARTestStudioDoc* document = GetDocument();
-	DiagramModel& diagram = document->GetDiagram();
-	DiagramError result = DiagramError::None;
-	bool attempted = false;
-
-	if (m_rightClickNodeId.has_value())
+	if (document->GetInteractionController().DeleteSelection())
 	{
-		attempted = true;
-		result = diagram.RemoveNode(*m_rightClickNodeId);
-	}
-	else if (m_rightClickConnectionId.has_value())
-	{
-		attempted = true;
-		result = diagram.RemoveConnection(*m_rightClickConnectionId);
-	}
-
-	if (attempted && result == DiagramError::None)
-	{
-		OrthogonalRouter::RouteAll(diagram);
 		MarkDiagramChanged(*document);
 	}
+}
 
-	m_rightClickNodeId.reset();
-	m_rightClickConnectionId.reset();
-	Invalidate(FALSE);
+void CARTestStudioView::OnEditUndo()
+{
+	CARTestStudioDoc* document = GetDocument();
+	if (document->GetInteractionController().Undo())
+	{
+		MarkDiagramChanged(*document);
+	}
+}
+
+void CARTestStudioView::OnEditRedo()
+{
+	CARTestStudioDoc* document = GetDocument();
+	if (document->GetInteractionController().Redo())
+	{
+		MarkDiagramChanged(*document);
+	}
+}
+
+void CARTestStudioView::OnUpdateEditDelete(CCmdUI* commandUi)
+{
+	commandUi->Enable(GetDocument()->GetInteractionController().CanDelete());
+}
+
+void CARTestStudioView::OnUpdateEditCopy(CCmdUI* commandUi)
+{
+	commandUi->Enable(GetDocument()->GetInteractionController().CanCopy());
+}
+
+void CARTestStudioView::OnUpdateEditCut(CCmdUI* commandUi)
+{
+	commandUi->Enable(GetDocument()->GetInteractionController().CanCopy());
+}
+
+void CARTestStudioView::OnUpdateEditPaste(CCmdUI* commandUi)
+{
+	commandUi->Enable(GetDocument()->GetInteractionController().CanPaste());
+}
+
+void CARTestStudioView::OnUpdateEditUndo(CCmdUI* commandUi)
+{
+	commandUi->Enable(GetDocument()->GetInteractionController().CanUndo());
+}
+
+void CARTestStudioView::OnUpdateEditRedo(CCmdUI* commandUi)
+{
+	commandUi->Enable(GetDocument()->GetInteractionController().CanRedo());
 }
 
 void CARTestStudioView::OnFilePrintPreview()
@@ -575,7 +445,6 @@ int CARTestStudioView::OnCreate(LPCREATESTRUCT createStruct)
 	{
 		return -1;
 	}
-
 	return m_dropTarget.Register(this) ? 0 : -1;
 }
 
@@ -643,11 +512,15 @@ BOOL CARTestStudioView::OnDrop(COleDataObject* dataObject, DROPEFFECT, CPoint po
 	if (text != nullptr)
 	{
 		CARTestStudioDoc* document = GetDocument();
-		(void)document->GetDiagram().AddNode(NodeKind::Rectangle, ToDomainPoint(point), text);
-		OrthogonalRouter::RouteAll(document->GetDiagram());
-		MarkDiagramChanged(*document);
+		if (document->GetInteractionController().AddNode(
+			NodeKind::Rectangle,
+			ToDomainPoint(point),
+			text))
+		{
+			MarkDiagramChanged(*document);
+			succeeded = TRUE;
+		}
 		GlobalUnlock(medium.hGlobal);
-		succeeded = TRUE;
 	}
 
 	ReleaseStgMedium(&medium);
@@ -664,9 +537,7 @@ void CARTestStudioView::Dump(CDumpContext& dumpContext) const
 {
 	CView::Dump(dumpContext);
 }
-#endif
 
-#ifdef _DEBUG
 CARTestStudioDoc* CARTestStudioView::GetDocument() const
 {
 	ASSERT(m_pDocument->IsKindOf(RUNTIME_CLASS(CARTestStudioDoc)));

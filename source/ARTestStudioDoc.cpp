@@ -100,6 +100,7 @@ END_MESSAGE_MAP()
 // CARTestStudioDoc construction/destruction
 
 CARTestStudioDoc::CARTestStudioDoc() noexcept
+	: m_interactionController(m_diagram)
 {
 }
 
@@ -113,6 +114,7 @@ BOOL CARTestStudioDoc::OnNewDocument()
 		return FALSE;
 
 	m_diagram.Clear();
+	m_interactionController.Reset();
 
 	return TRUE;
 }
@@ -151,6 +153,7 @@ BOOL CARTestStudioDoc::OnOpenDocument(LPCTSTR lpszPathName)
 
 	DeleteContents();
 	m_diagram = std::move(loadedDiagram);
+	m_interactionController.Reset();
 	SetPathName(lpszPathName, TRUE);
 	SetModifiedFlag(FALSE);
 	UpdateAllViews(nullptr);
@@ -169,7 +172,9 @@ BOOL CARTestStudioDoc::OnSaveDocument(LPCTSTR lpszPathName)
 		return FALSE;
 	}
 
-	SetPathName(lpszPathName, TRUE);
+	// CDocument::DoSave owns the visible document path. In particular, MFC's
+	// recovery manager calls DoSave(autosavePath, FALSE), which must save a copy
+	// without replacing the document name with the generated autosave filename.
 	SetModifiedFlag(FALSE);
 	return TRUE;
 }

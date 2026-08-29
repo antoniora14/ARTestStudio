@@ -63,13 +63,17 @@
   <ItemGroup>
     <ClCompile Include="TestMain.cpp" />
     <ClCompile Include="Application\FaultServiceTests.cpp" />
+    <ClCompile Include="Application\InteractionControllerTests.cpp" />
     <ClCompile Include="Domain\DiagramModelTests.cpp" />
     <ClCompile Include="Domain\OrthogonalRouterTests.cpp" />
     <ClCompile Include="Infrastructure\FileFaultReporterTests.cpp" />
     <ClCompile Include="Infrastructure\TextDiagramStorageTests.cpp" />
     <ClCompile Include="..\source\Domain\DiagramModel.cpp" />
     <ClCompile Include="..\source\Domain\DiagramGeometry.cpp" />
+    <ClCompile Include="..\source\Domain\DiagramHitTesting.cpp" />
     <ClCompile Include="..\source\Domain\OrthogonalRouter.cpp" />
+    <ClCompile Include="..\source\Application\EditCommand.cpp" />
+    <ClCompile Include="..\source\Application\InteractionController.cpp" />
     <ClCompile Include="..\source\Infrastructure\TextDiagramStorage.cpp" />
     <ClCompile Include="..\source\Infrastructure\WindowsAtomicFileWriter.cpp" />
     <ClCompile Include="..\source\Application\FaultService.cpp" />

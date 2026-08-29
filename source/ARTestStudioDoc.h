@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "Application/InteractionController.h"
 #include "Domain/DiagramModel.h"
 
 
@@ -21,6 +22,8 @@ public:
 public:
 	[[nodiscard]] arteststudio::domain::DiagramModel& GetDiagram() noexcept { return m_diagram; }
 	[[nodiscard]] const arteststudio::domain::DiagramModel& GetDiagram() const noexcept { return m_diagram; }
+	[[nodiscard]] arteststudio::application::InteractionController& GetInteractionController() noexcept { return m_interactionController; }
+	[[nodiscard]] const arteststudio::application::InteractionController& GetInteractionController() const noexcept { return m_interactionController; }
 
 // Overrides
 public:
@@ -44,6 +47,7 @@ public:
 
 protected:
 	arteststudio::domain::DiagramModel m_diagram;
+	arteststudio::application::InteractionController m_interactionController;
 
 // Generated message map functions
 protected:

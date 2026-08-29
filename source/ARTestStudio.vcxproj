@@ -205,10 +205,14 @@
     <ClInclude Include="ViewTree.h" />
     <ClInclude Include="Domain\DiagramModel.h" />
     <ClInclude Include="Domain\DiagramGeometry.h" />
+    <ClInclude Include="Domain\DiagramHitTesting.h" />
     <ClInclude Include="Domain\OrthogonalRouter.h" />
     <ClInclude Include="Application\AtomicFileWriter.h" />
     <ClInclude Include="Application\DiagramStorage.h" />
+    <ClInclude Include="Application\EditCommand.h" />
     <ClInclude Include="Application\FaultService.h" />
+    <ClInclude Include="Application\InteractionController.h" />
+    <ClInclude Include="Application\SelectionModel.h" />
     <ClInclude Include="Infrastructure\TextDiagramStorage.h" />
     <ClInclude Include="Infrastructure\WindowsAtomicFileWriter.h" />
     <ClInclude Include="Infrastructure\FileFaultReporter.h" />
@@ -239,7 +243,16 @@
     <ClCompile Include="Domain\DiagramGeometry.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Domain\DiagramHitTesting.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Domain\OrthogonalRouter.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Application\EditCommand.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Application\InteractionController.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Infrastructure\TextDiagramStorage.cpp">

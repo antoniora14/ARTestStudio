@@ -2,30 +2,12 @@
 
 #pragma once
 
-#include "Domain/DiagramModel.h"
-
-#include <optional>
-
 class CARTestStudioDoc;
 
 class CARTestStudioView : public CView
 {
 private:
 	COleDropTarget m_dropTarget;
-
-	bool m_drawingLine = false;
-	std::optional<arteststudio::domain::NodeId> m_startNodeId;
-	arteststudio::domain::PortId m_startPortId = arteststudio::domain::PortId::Top;
-	CPoint m_tempEndPoint;
-
-	std::optional<arteststudio::domain::NodeId> m_draggingNodeId;
-	std::optional<arteststudio::domain::NodeId> m_rightClickNodeId;
-	CPoint m_lastMousePoint;
-
-	std::optional<arteststudio::domain::ConnectionId> m_rightClickConnectionId;
-
-	std::optional<arteststudio::domain::Node> m_clipboardNode;
-	CPoint m_lastRightClickPoint;
 
 #ifdef _DEBUG
 	CPoint m_mousePosition;
@@ -66,7 +48,6 @@ protected:
 	afx_msg void OnRButtonUp(UINT nFlags, CPoint point);
 	afx_msg void OnContextMenu(CWnd* pWnd, CPoint point);
 	afx_msg void OnDestroy();
-
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
 	afx_msg void OnMouseMove(UINT nFlags, CPoint point);
 	afx_msg void OnLButtonUp(UINT nFlags, CPoint point);
@@ -75,6 +56,14 @@ protected:
 	afx_msg void OnEditCopy();
 	afx_msg void OnEditCut();
 	afx_msg void OnEditPaste();
+	afx_msg void OnEditUndo();
+	afx_msg void OnEditRedo();
+	afx_msg void OnUpdateEditDelete(CCmdUI* commandUi);
+	afx_msg void OnUpdateEditCopy(CCmdUI* commandUi);
+	afx_msg void OnUpdateEditCut(CCmdUI* commandUi);
+	afx_msg void OnUpdateEditPaste(CCmdUI* commandUi);
+	afx_msg void OnUpdateEditUndo(CCmdUI* commandUi);
+	afx_msg void OnUpdateEditRedo(CCmdUI* commandUi);
 	DECLARE_MESSAGE_MAP()
 };
 
