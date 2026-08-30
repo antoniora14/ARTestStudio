@@ -102,6 +102,9 @@
     <ClInclude Include="Application\AtomicFileWriter.h">
       <Filter>Application</Filter>
     </ClInclude>
+    <ClInclude Include="Application\DiagramSerializer.h">
+      <Filter>Application</Filter>
+    </ClInclude>
     <ClInclude Include="Application\FaultService.h">
       <Filter>Application</Filter>
     </ClInclude>
@@ -115,6 +118,21 @@
       <Filter>Application</Filter>
     </ClInclude>
     <ClInclude Include="Infrastructure\TextDiagramStorage.h">
+      <Filter>Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="Infrastructure\DiagramDocumentDto.h">
+      <Filter>Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="Infrastructure\DiagramSerializationSupport.h">
+      <Filter>Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="Infrastructure\JsonDiagramSerializer.h">
+      <Filter>Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="Infrastructure\LegacyDiagramSerializer.h">
+      <Filter>Infrastructure</Filter>
+    </ClInclude>
+    <ClInclude Include="Infrastructure\VersionedDiagramSerializer.h">
       <Filter>Infrastructure</Filter>
     </ClInclude>
     <ClInclude Include="Infrastructure\WindowsAtomicFileWriter.h">
@@ -180,6 +198,18 @@
       <Filter>Domain</Filter>
     </ClCompile>
     <ClCompile Include="Infrastructure\TextDiagramStorage.cpp">
+      <Filter>Infrastructure</Filter>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\DiagramSerializationSupport.cpp">
+      <Filter>Infrastructure</Filter>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\JsonDiagramSerializer.cpp">
+      <Filter>Infrastructure</Filter>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\LegacyDiagramSerializer.cpp">
+      <Filter>Infrastructure</Filter>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\VersionedDiagramSerializer.cpp">
       <Filter>Infrastructure</Filter>
     </ClCompile>
     <ClCompile Include="Infrastructure\WindowsAtomicFileWriter.cpp">

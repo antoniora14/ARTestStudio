@@ -1,0 +1,21 @@
+{
+  "format": "ARTestStudio.Diagram",
+  "version": 2,
+  "nodes": [
+    {
+      "id": 1,
+      "kind": "rectangle",
+      "position": { "x": 100, "y": 100 },
+      "size": { "width": 150, "height": 100 },
+      "label": "OnlyNode"
+    }
+  ],
+  "connections": [
+    {
+      "id": 1,
+      "from": { "nodeId": 1, "port": "bottom" },
+      "to": { "nodeId": 999, "port": "top" },
+      "route": []
+    }
+  ]
+}

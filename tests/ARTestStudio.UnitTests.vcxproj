@@ -75,6 +75,10 @@
     <ClCompile Include="..\source\Application\EditCommand.cpp" />
     <ClCompile Include="..\source\Application\InteractionController.cpp" />
     <ClCompile Include="..\source\Infrastructure\TextDiagramStorage.cpp" />
+    <ClCompile Include="..\source\Infrastructure\DiagramSerializationSupport.cpp" />
+    <ClCompile Include="..\source\Infrastructure\JsonDiagramSerializer.cpp" />
+    <ClCompile Include="..\source\Infrastructure\LegacyDiagramSerializer.cpp" />
+    <ClCompile Include="..\source\Infrastructure\VersionedDiagramSerializer.cpp" />
     <ClCompile Include="..\source\Infrastructure\WindowsAtomicFileWriter.cpp" />
     <ClCompile Include="..\source\Application\FaultService.cpp" />
     <ClCompile Include="..\source\Infrastructure\FileFaultReporter.cpp" />

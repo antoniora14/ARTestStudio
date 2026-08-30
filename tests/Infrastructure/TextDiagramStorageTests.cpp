@@ -5,6 +5,7 @@
 #include "Infrastructure/TextDiagramStorage.h"
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include <filesystem>
 #include <fstream>
@@ -18,11 +19,13 @@ namespace arteststudio::tests
 	using application::StorageError;
 	using application::StorageResult;
 	using infrastructure::TextDiagramStorage;
+	using json = nlohmann::json;
 
 	TEST(TextDiagramStorageTests, PersistsAndRestoresDiagram)
 	{
 		DiagramModel original;
-		const NodeId source = original.AddNode(NodeKind::Rectangle, {10, 20}, 180, 90, L"Fuente ñ");
+		const std::wstring sourceLabel = L"Fuente ñ \"encendida\" \\ ruta\nsiguiente";
+		const NodeId source = original.AddNode(NodeKind::Rectangle, {10, 20}, 180, 90, sourceLabel);
 		const NodeId target = original.AddNode(NodeKind::Diamond, {420, 260}, 110, 80, L"Condición");
 		const AddConnectionResult connection = original.AddConnection(
 			{source, PortId::Right},
@@ -47,7 +50,8 @@ namespace arteststudio::tests
 		VerifyTestCondition(restoredSource.position == Point{10, 20}, "The source position must be restored.");
 		VerifyTestCondition(restoredSource.width == 180 && restoredSource.height == 90,
 			"The source dimensions must be restored.");
-		VerifyTestCondition(restoredSource.label == L"Fuente ñ", "UTF-8 labels must round-trip.");
+		VerifyTestCondition(restoredSource.label == sourceLabel,
+			"Unicode labels with JSON escapes and line breaks must round-trip.");
 		VerifyTestCondition(restoredTarget.kind == NodeKind::Diamond, "The target kind must be restored.");
 		VerifyTestCondition(restoredTarget.label == L"Condición", "Accented labels must round-trip.");
 
@@ -61,6 +65,150 @@ namespace arteststudio::tests
 			"Connection ports must be restored.");
 		VerifyTestCondition(restoredConnection.intermediatePoints == std::vector<Point>{{240, 65}, {475, 65}},
 			"The route points must be restored.");
+	}
+
+	TEST(TextDiagramStorageTests, SavesNewDocumentsAsVersionTwoJson)
+	{
+		DiagramModel diagram;
+		(void)diagram.AddNode(NodeKind::Rectangle, {15, 25}, L"JSON document");
+		TemporaryDiagramFile file;
+		const TextDiagramStorage storage;
+
+		VerifyTestCondition(static_cast<bool>(storage.Save(file.Path(), diagram)),
+			"A valid diagram must be saved as JSON.");
+		const json root = json::parse(ReadFileContents(file.Path()));
+		VerifyTestCondition(root.is_object(), "The saved document root must be a JSON object.");
+		VerifyTestCondition(root.at("format") == "ARTestStudio.Diagram",
+			"The JSON format discriminator must be stable.");
+		VerifyTestCondition(root.at("version") == 2, "New documents must use JSON schema version 2.");
+		VerifyTestCondition(root.at("nodes").size() == 1 && root.at("connections").empty(),
+			"The JSON document must contain the complete diagram collections.");
+	}
+
+	TEST(TextDiagramStorageTests, MigratesLegacyVersionOneToJsonWhenSaved)
+	{
+		TemporaryDiagramFile file;
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output << "ARTESTSTUDIO_DIAGRAM 1\n"
+				<< "NODES 1\n"
+				<< "NODE 42 0 10 20 150 100 \"Legacy step\"\n"
+				<< "CONNECTIONS 0\n"
+				<< "END\n";
+		}
+
+		const TextDiagramStorage storage;
+		DiagramModel diagram;
+		VerifyTestCondition(static_cast<bool>(storage.Load(file.Path(), diagram)),
+			"A legacy version-one document must load before migration.");
+		VerifyTestCondition(static_cast<bool>(storage.Save(file.Path(), diagram)),
+			"Saving a loaded legacy document must migrate it to the current format.");
+
+		const json migrated = json::parse(ReadFileContents(file.Path()));
+		VerifyTestCondition(migrated.at("version") == 2,
+			"A migrated legacy document must be written as version-two JSON.");
+		VerifyTestCondition(migrated.at("nodes").at(0).at("id") == 42,
+			"Migration must preserve stable identifiers.");
+		VerifyTestCondition(migrated.at("nodes").at(0).at("label") == "Legacy step",
+			"Migration must preserve content.");
+	}
+
+	TEST(TextDiagramStorageTests, RejectsUnsupportedJsonVersionsAtomically)
+	{
+		TemporaryDiagramFile file;
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output << R"json({
+  "format": "ARTestStudio.Diagram",
+  "version": 999,
+  "nodes": [],
+  "connections": []
+})json";
+		}
+
+		DiagramModel existing;
+		const NodeId original = existing.AddNode(NodeKind::Rectangle, {5, 5}, L"Preserve");
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Load(file.Path(), existing);
+
+		VerifyTestCondition(result.error == StorageError::UnsupportedVersion,
+			"A future JSON version must report UnsupportedVersion.");
+		VerifyTestCondition(existing.Nodes().size() == 1 && existing.FindNode(original) != nullptr,
+			"A future JSON version must not modify the active diagram.");
+	}
+
+	TEST(TextDiagramStorageTests, RejectsMalformedJsonAtomically)
+	{
+		TemporaryDiagramFile file;
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output << "{\"format\":\"ARTestStudio.Diagram\",\"version\":2,\"nodes\":[";
+		}
+
+		DiagramModel existing;
+		const NodeId original = existing.AddNode(NodeKind::Diamond, {7, 9}, L"Keep");
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Load(file.Path(), existing);
+
+		VerifyTestCondition(result.error == StorageError::InvalidFormat,
+			"Truncated JSON must report InvalidFormat.");
+		VerifyTestCondition(existing.Nodes().size() == 1 && existing.FindNode(original) != nullptr,
+			"Malformed JSON must not partially replace the active diagram.");
+	}
+
+	TEST(TextDiagramStorageTests, RejectsInvalidJsonReferencesAtomically)
+	{
+		TemporaryDiagramFile file;
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output << R"json({
+  "format": "ARTestStudio.Diagram",
+  "version": 2,
+  "nodes": [
+    {"id": 1, "kind": "rectangle", "position": {"x": 0, "y": 0},
+     "size": {"width": 150, "height": 100}, "label": "Only node"}
+  ],
+  "connections": [
+    {"id": 1, "from": {"nodeId": 1, "port": "right"},
+     "to": {"nodeId": 999, "port": "left"}, "route": []}
+  ]
+})json";
+		}
+
+		DiagramModel existing;
+		const NodeId original = existing.AddNode(NodeKind::Rectangle, {11, 13}, L"Preserve");
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Load(file.Path(), existing);
+
+		VerifyTestCondition(result.error == StorageError::InvalidData,
+			"A JSON connection to a missing node must report InvalidData.");
+		VerifyTestCondition(existing.Nodes().size() == 1 && existing.FindNode(original) != nullptr,
+			"Invalid JSON references must not modify the active diagram.");
+	}
+
+	TEST(TextDiagramStorageTests, RejectsInvalidUtf8JsonAtomically)
+	{
+		TemporaryDiagramFile file;
+		std::string invalid =
+			"{\"format\":\"ARTestStudio.Diagram\",\"version\":2,\"nodes\":[],"
+			"\"connections\":[],\"invalid\":\"";
+		invalid.push_back(static_cast<char>(0xC3));
+		invalid.push_back(static_cast<char>(0x28));
+		invalid += "\"}";
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output.write(invalid.data(), static_cast<std::streamsize>(invalid.size()));
+		}
+
+		DiagramModel existing;
+		const NodeId original = existing.AddNode(NodeKind::Rectangle, {17, 19}, L"Preserve");
+		const TextDiagramStorage storage;
+		const StorageResult result = storage.Load(file.Path(), existing);
+
+		VerifyTestCondition(result.error == StorageError::InvalidEncoding,
+			"Invalid UTF-8 JSON must report InvalidEncoding.");
+		VerifyTestCondition(existing.Nodes().size() == 1 && existing.FindNode(original) != nullptr,
+			"Invalid UTF-8 must not modify the active diagram.");
 	}
 
 	TEST(TextDiagramStorageTests, PreservesIdentifiersWithGaps)

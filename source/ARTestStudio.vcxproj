@@ -57,6 +57,14 @@
     <UseOfMfc>Dynamic</UseOfMfc>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <VcpkgRoot Condition="'$(VcpkgRoot)'==''">$(VCInstallDir)vcpkg\</VcpkgRoot>
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+    <VcpkgManifestRoot>$(ProjectDir)..\</VcpkgManifestRoot>
+    <VcpkgAutoLink>false</VcpkgAutoLink>
+  </PropertyGroup>
+  <Import Project="$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.props"
+          Condition="Exists('$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.props')" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="Shared">
@@ -208,12 +216,18 @@
     <ClInclude Include="Domain\DiagramHitTesting.h" />
     <ClInclude Include="Domain\OrthogonalRouter.h" />
     <ClInclude Include="Application\AtomicFileWriter.h" />
+    <ClInclude Include="Application\DiagramSerializer.h" />
     <ClInclude Include="Application\DiagramStorage.h" />
     <ClInclude Include="Application\EditCommand.h" />
     <ClInclude Include="Application\FaultService.h" />
     <ClInclude Include="Application\InteractionController.h" />
     <ClInclude Include="Application\SelectionModel.h" />
     <ClInclude Include="Infrastructure\TextDiagramStorage.h" />
+    <ClInclude Include="Infrastructure\DiagramDocumentDto.h" />
+    <ClInclude Include="Infrastructure\DiagramSerializationSupport.h" />
+    <ClInclude Include="Infrastructure\JsonDiagramSerializer.h" />
+    <ClInclude Include="Infrastructure\LegacyDiagramSerializer.h" />
+    <ClInclude Include="Infrastructure\VersionedDiagramSerializer.h" />
     <ClInclude Include="Infrastructure\WindowsAtomicFileWriter.h" />
     <ClInclude Include="Infrastructure\FileFaultReporter.h" />
   </ItemGroup>
@@ -256,6 +270,18 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Infrastructure\TextDiagramStorage.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\DiagramSerializationSupport.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\JsonDiagramSerializer.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\LegacyDiagramSerializer.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Infrastructure\VersionedDiagramSerializer.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Infrastructure\WindowsAtomicFileWriter.cpp">
@@ -302,6 +328,8 @@
     <None Include="res\ARTestStudio.rc2" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.targets"
+          Condition="Exists('$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.targets')" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>

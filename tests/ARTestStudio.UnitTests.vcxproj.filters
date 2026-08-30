@@ -59,6 +59,18 @@
     <ClCompile Include="..\source\Infrastructure\TextDiagramStorage.cpp">
       <Filter>Production Sources</Filter>
     </ClCompile>
+    <ClCompile Include="..\source\Infrastructure\DiagramSerializationSupport.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Infrastructure\JsonDiagramSerializer.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Infrastructure\LegacyDiagramSerializer.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Infrastructure\VersionedDiagramSerializer.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
     <ClCompile Include="..\source\Infrastructure\WindowsAtomicFileWriter.cpp">
       <Filter>Production Sources</Filter>
     </ClCompile>

@@ -1,0 +1,55 @@
+{
+  "connections": [
+    {
+      "from": {
+        "nodeId": 1,
+        "port": "bottom"
+      },
+      "id": 1,
+      "route": [
+        {
+          "x": 330,
+          "y": 249
+        },
+        {
+          "x": 329,
+          "y": 249
+        }
+      ],
+      "to": {
+        "nodeId": 2,
+        "port": "top"
+      }
+    }
+  ],
+  "format": "ARTestStudio.Diagram",
+  "nodes": [
+    {
+      "id": 1,
+      "kind": "rectangle",
+      "label": "PowerON( )",
+      "position": {
+        "x": 255,
+        "y": 137
+      },
+      "size": {
+        "height": 100,
+        "width": 150
+      }
+    },
+    {
+      "id": 2,
+      "kind": "rectangle",
+      "label": "PowerOFF( )",
+      "position": {
+        "x": 254,
+        "y": 327
+      },
+      "size": {
+        "height": 100,
+        "width": 150
+      }
+    }
+  ],
+  "version": 2
+}
