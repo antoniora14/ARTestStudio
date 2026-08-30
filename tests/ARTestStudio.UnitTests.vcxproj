@@ -64,6 +64,7 @@
     <ClCompile Include="TestMain.cpp" />
     <ClCompile Include="Application\FaultServiceTests.cpp" />
     <ClCompile Include="Application\InteractionControllerTests.cpp" />
+    <ClCompile Include="Application\UnexpectedCloseRecoveryTests.cpp" />
     <ClCompile Include="Domain\DiagramModelTests.cpp" />
     <ClCompile Include="Domain\OrthogonalRouterTests.cpp" />
     <ClCompile Include="Infrastructure\FileFaultReporterTests.cpp" />
@@ -74,6 +75,8 @@
     <ClCompile Include="..\source\Domain\OrthogonalRouter.cpp" />
     <ClCompile Include="..\source\Application\EditCommand.cpp" />
     <ClCompile Include="..\source\Application\InteractionController.cpp" />
+    <ClCompile Include="..\source\Application\UnexpectedCloseRecovery.cpp" />
+    <ClCompile Include="..\source\Application\DiagramRecoveryService.cpp" />
     <ClCompile Include="..\source\Infrastructure\TextDiagramStorage.cpp" />
     <ClCompile Include="..\source\Infrastructure\DiagramSerializationSupport.cpp" />
     <ClCompile Include="..\source\Infrastructure\JsonDiagramSerializer.cpp" />

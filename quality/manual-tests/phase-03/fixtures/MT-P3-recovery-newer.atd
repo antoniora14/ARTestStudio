@@ -1,0 +1,31 @@
+{
+  "format": "ARTestStudio.Diagram",
+  "version": 2,
+  "nodes": [
+    {
+      "id": 1,
+      "kind": "rectangle",
+      "position": { "x": 90, "y": 80 },
+      "size": { "width": 190, "height": 100 },
+      "label": "RECOVERED - newer valid version"
+    },
+    {
+      "id": 2,
+      "kind": "diamond",
+      "position": { "x": 420, "y": 260 },
+      "size": { "width": 130, "height": 90 },
+      "label": "RecoveredDecision"
+    }
+  ],
+  "connections": [
+    {
+      "id": 1,
+      "from": { "nodeId": 1, "port": "bottom" },
+      "to": { "nodeId": 2, "port": "top" },
+      "route": [
+        { "x": 185, "y": 210 },
+        { "x": 485, "y": 210 }
+      ]
+    }
+  ]
+}

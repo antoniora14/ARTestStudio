@@ -32,6 +32,9 @@
     <ClCompile Include="Application\InteractionControllerTests.cpp">
       <Filter>Application</Filter>
     </ClCompile>
+    <ClCompile Include="Application\UnexpectedCloseRecoveryTests.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
     <ClCompile Include="Domain\DiagramModelTests.cpp">
       <Filter>Domain</Filter>
     </ClCompile>
@@ -77,10 +80,16 @@
     <ClCompile Include="..\source\Application\FaultService.cpp">
       <Filter>Production Sources</Filter>
     </ClCompile>
+    <ClCompile Include="..\source\Application\DiagramRecoveryService.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
     <ClCompile Include="..\source\Application\EditCommand.cpp">
       <Filter>Production Sources</Filter>
     </ClCompile>
     <ClCompile Include="..\source\Application\InteractionController.cpp">
+      <Filter>Production Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Application\UnexpectedCloseRecovery.cpp">
       <Filter>Production Sources</Filter>
     </ClCompile>
     <ClCompile Include="..\source\Infrastructure\FileFaultReporter.cpp">

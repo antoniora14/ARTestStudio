@@ -11,6 +11,7 @@
 #endif
 
 #include "ARTestStudioDoc.h"
+#include "Application/DiagramRecoveryService.h"
 #include "Application/DiagramStorage.h"
 #include "Application/FaultService.h"
 #include "Infrastructure/TextDiagramStorage.h"
@@ -28,18 +29,43 @@
 namespace
 {
 	using arteststudio::application::DescribeStorageError;
+	using arteststudio::application::DescribeRecoveryReason;
+	using arteststudio::application::DescribeRecoverySource;
+	using arteststudio::application::DiagramRecoveryService;
 	using arteststudio::application::Fault;
 	using arteststudio::application::FaultCategory;
 	using arteststudio::application::FaultService;
 	using arteststudio::application::FaultSeverity;
-	using arteststudio::application::IDiagramStorage;
+	using arteststudio::application::RecoveryCandidate;
 	using arteststudio::application::StorageResult;
 	using arteststudio::infrastructure::TextDiagramStorage;
 
-	[[nodiscard]] IDiagramStorage& GetDiagramStorage() noexcept
+	[[nodiscard]] TextDiagramStorage& GetDiagramStorage() noexcept
 	{
 		static TextDiagramStorage storage;
 		return storage;
+	}
+
+	[[nodiscard]] DiagramRecoveryService& GetRecoveryService() noexcept
+	{
+		static DiagramRecoveryService service{GetDiagramStorage()};
+		return service;
+	}
+
+	[[nodiscard]] int AskRecoveryDecision(
+		const std::filesystem::path& destination,
+		const RecoveryCandidate& candidate)
+	{
+		std::wstring message = L"ARTestStudio encontro una copia de recuperacion valida para:\n\n";
+		message += destination.native();
+		message += L"\n\nOrigen: ";
+		message += DescribeRecoverySource(candidate.source);
+		message += L".\nMotivo: ";
+		message += DescribeRecoveryReason(candidate.reason);
+		message += L".\n\nSi: recuperar la copia y reemplazar el documento principal.";
+		message += L"\nNo: intentar abrir el documento principal sin recuperarlo.";
+		message += L"\nCancelar: no abrir el documento.";
+		return AfxMessageBox(message.c_str(), MB_YESNOCANCEL | MB_ICONWARNING);
 	}
 
 	void ReportStorageFailure(
@@ -144,7 +170,31 @@ BOOL CARTestStudioDoc::OnOpenDocument(LPCTSTR lpszPathName)
 	}
 
 	arteststudio::domain::DiagramModel loadedDiagram;
-	const StorageResult result = GetDiagramStorage().Load(path, loadedDiagram);
+	StorageResult result;
+	const arteststudio::application::RecoveryInspection inspection =
+		GetRecoveryService().Inspect(path);
+	if (inspection.candidate.available)
+	{
+		const int decision = AskRecoveryDecision(path, inspection.candidate);
+		if (decision == IDCANCEL)
+		{
+			GetRecoveryService().RecordCancelled(path, inspection.candidate);
+			return FALSE;
+		}
+		if (decision == IDYES)
+		{
+			result = GetRecoveryService().Recover(path, inspection.candidate, loadedDiagram);
+		}
+		else
+		{
+			GetRecoveryService().RecordDeclined(path, inspection.candidate);
+			result = GetDiagramStorage().Load(path, loadedDiagram);
+		}
+	}
+	else
+	{
+		result = GetDiagramStorage().Load(path, loadedDiagram);
+	}
 	if (!result)
 	{
 		ReportStorageFailure(L"abrir", path, result);

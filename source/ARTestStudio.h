@@ -26,6 +26,7 @@ public:
 	virtual int ExitInstance();
 	virtual int Run() override;
 	virtual LRESULT ProcessWndProcException(CException* exception, const MSG* message) override;
+	virtual CDataRecoveryHandler* GetDataRecoveryHandler() override;
 
 // Implementation
 	UINT  m_nAppLook;

@@ -102,6 +102,12 @@
     <ClInclude Include="Application\AtomicFileWriter.h">
       <Filter>Application</Filter>
     </ClInclude>
+    <ClInclude Include="Application\DiagramRecovery.h">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="Application\DiagramRecoveryService.h">
+      <Filter>Application</Filter>
+    </ClInclude>
     <ClInclude Include="Application\DiagramSerializer.h">
       <Filter>Application</Filter>
     </ClInclude>
@@ -115,6 +121,9 @@
       <Filter>Application</Filter>
     </ClInclude>
     <ClInclude Include="Application\SelectionModel.h">
+      <Filter>Application</Filter>
+    </ClInclude>
+    <ClInclude Include="Application\UnexpectedCloseRecovery.h">
       <Filter>Application</Filter>
     </ClInclude>
     <ClInclude Include="Infrastructure\TextDiagramStorage.h">
@@ -218,10 +227,16 @@
     <ClCompile Include="Application\FaultService.cpp">
       <Filter>Application</Filter>
     </ClCompile>
+    <ClCompile Include="Application\DiagramRecoveryService.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
     <ClCompile Include="Application\EditCommand.cpp">
       <Filter>Application</Filter>
     </ClCompile>
     <ClCompile Include="Application\InteractionController.cpp">
+      <Filter>Application</Filter>
+    </ClCompile>
+    <ClCompile Include="Application\UnexpectedCloseRecovery.cpp">
       <Filter>Application</Filter>
     </ClCompile>
     <ClCompile Include="Infrastructure\FileFaultReporter.cpp">

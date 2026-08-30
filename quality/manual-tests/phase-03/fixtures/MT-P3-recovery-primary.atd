@@ -1,0 +1,14 @@
+{
+  "format": "ARTestStudio.Diagram",
+  "version": 2,
+  "nodes": [
+    {
+      "id": 1,
+      "kind": "rectangle",
+      "position": { "x": 90, "y": 80 },
+      "size": { "width": 190, "height": 100 },
+      "label": "PRIMARY - confirmed version"
+    }
+  ],
+  "connections": []
+}

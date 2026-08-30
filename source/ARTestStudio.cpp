@@ -13,9 +13,12 @@
 #include "ARTestStudioDoc.h"
 #include "ARTestStudioView.h"
 #include "Application/FaultService.h"
+#include "Application/UnexpectedCloseRecovery.h"
 #include "Infrastructure/FileFaultReporter.h"
 
+#include <afxdatarecovery.h>
 #include <cstdlib>
+#include <cstdint>
 #include <exception>
 #include <string>
 #include <string_view>
@@ -30,7 +33,13 @@ namespace
 	using arteststudio::application::FaultCategory;
 	using arteststudio::application::FaultService;
 	using arteststudio::application::FaultSeverity;
+	using arteststudio::application::PendingRecoveryDisposition;
+	using arteststudio::application::PendingRecoverySession;
 	using arteststudio::infrastructure::FileFaultReporter;
+
+	constexpr LPCTSTR RecoveryProfileSection = _T("UnexpectedCloseRecovery");
+	constexpr LPCTSTR RecoveryRestartIdentifierEntry = _T("RestartIdentifier");
+	constexpr LPCTSTR RecoveryProcessIdEntry = _T("ProcessId");
 
 	[[nodiscard]] FileFaultReporter& GetDefaultFaultReporter() noexcept
 	{
@@ -94,6 +103,180 @@ namespace
 		}
 	}
 
+	void ClearPendingRecoveryProfile() noexcept
+	{
+		try
+		{
+			CWinApp* application = AfxGetApp();
+			if (application != nullptr)
+			{
+				application->WriteProfileString(
+					RecoveryProfileSection,
+					RecoveryRestartIdentifierEntry,
+					nullptr);
+				application->WriteProfileString(
+					RecoveryProfileSection,
+					RecoveryProcessIdEntry,
+					nullptr);
+			}
+		}
+		catch (...)
+		{
+		}
+	}
+
+	void ClearPendingRecoveryProfileForCurrentProcess() noexcept
+	{
+		CWinApp* application = AfxGetApp();
+		if (application == nullptr)
+		{
+			return;
+		}
+
+		const UINT recordedProcessId = application->GetProfileInt(
+			RecoveryProfileSection,
+			RecoveryProcessIdEntry,
+			0);
+		if (recordedProcessId == ::GetCurrentProcessId())
+		{
+			ClearPendingRecoveryProfile();
+		}
+	}
+
+	[[nodiscard]] bool IsProcessRunning(DWORD processId) noexcept
+	{
+		if (processId == 0)
+		{
+			return false;
+		}
+
+		HANDLE process = ::OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+		if (process == nullptr)
+		{
+			return ::GetLastError() == ERROR_ACCESS_DENIED;
+		}
+
+		const DWORD waitResult = ::WaitForSingleObject(process, 0);
+		::CloseHandle(process);
+		return waitResult == WAIT_TIMEOUT;
+	}
+
+	class CPersistentDataRecoveryHandler final : public CDataRecoveryHandler
+	{
+	public:
+		CPersistentDataRecoveryHandler(DWORD supportFlags, int autosaveInterval)
+			: CDataRecoveryHandler(supportFlags, autosaveInterval)
+		{
+		}
+
+		BOOL AutosaveDocumentInfo(CDocument* document, BOOL resetModifiedFlag = TRUE) override
+		{
+			const BOOL result = CDataRecoveryHandler::AutosaveDocumentInfo(document, resetModifiedFlag);
+			if (result && resetModifiedFlag)
+			{
+				PersistCatalog();
+			}
+			else if (!result)
+			{
+				ReportApplicationFault(
+					FaultSeverity::Warning,
+					FaultCategory::Storage,
+					L"RECOVERY_AUTOSAVE_FAILED",
+					L"Autoguardar sesion",
+					L"No se pudo crear la copia periodica de recuperacion.");
+			}
+			return result;
+		}
+
+		BOOL RemoveDocumentInfo(CDocument* document) override
+		{
+			const BOOL result = CDataRecoveryHandler::RemoveDocumentInfo(document);
+			PersistCatalog();
+			return result;
+		}
+
+		BOOL DeleteAllAutosavedFiles() override
+		{
+			const BOOL result = CDataRecoveryHandler::DeleteAllAutosavedFiles();
+			ClearPendingRecoveryProfileForCurrentProcess();
+			return result;
+		}
+
+	private:
+		[[nodiscard]] bool HasAutosavedDocument() const
+		{
+			POSITION position = m_mapDocNameToAutosaveName.GetStartPosition();
+			while (position != nullptr)
+			{
+				CString document;
+				CString autosave;
+				m_mapDocNameToAutosaveName.GetNextAssoc(position, document, autosave);
+				if (!autosave.IsEmpty())
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		void DeletePersistedCatalog() noexcept
+		{
+			try
+			{
+				CWinApp* application = AfxGetApp();
+				if (application != nullptr && !GetRestartIdentifier().IsEmpty())
+				{
+					CRegKey applicationKey(application->GetAppRegistryKey());
+					applicationKey.RecurseDeleteKey(GetRestartIdentifier());
+				}
+			}
+			catch (...)
+			{
+			}
+		}
+
+		void PersistCatalog() noexcept
+		{
+			if (!HasAutosavedDocument())
+			{
+				DeletePersistedCatalog();
+				ClearPendingRecoveryProfileForCurrentProcess();
+				return;
+			}
+
+			DeletePersistedCatalog();
+			if (!CDataRecoveryHandler::SaveOpenDocumentList())
+			{
+				ReportApplicationFault(
+					FaultSeverity::Warning,
+					FaultCategory::Storage,
+					L"RECOVERY_AUTOSAVE_CATALOG_FAILED",
+					L"Catalogar autoguardado",
+					L"La copia periodica existe, pero no pudo registrarse para un reinicio manual.");
+				return;
+			}
+
+			CWinApp* application = AfxGetApp();
+			if (application == nullptr
+				|| !application->WriteProfileString(
+					RecoveryProfileSection,
+					RecoveryRestartIdentifierEntry,
+					GetRestartIdentifier())
+				|| !application->WriteProfileInt(
+					RecoveryProfileSection,
+					RecoveryProcessIdEntry,
+					::GetCurrentProcessId()))
+			{
+				ReportApplicationFault(
+					FaultSeverity::Warning,
+					FaultCategory::Storage,
+					L"RECOVERY_AUTOSAVE_CATALOG_FAILED",
+					L"Catalogar autoguardado",
+					L"No se pudo conservar la identidad de la sesion para un reinicio manual.");
+			}
+		}
+	};
+
 	void ShowUnexpectedFailure() noexcept
 	{
 		try
@@ -133,6 +316,9 @@ CARTestStudioApp::CARTestStudioApp() noexcept
 	m_nAppLook = 0;
 	// support Restart Manager
 	m_dwRestartManagerSupportFlags = AFX_RESTART_MANAGER_SUPPORT_ALL_ASPECTS;
+	// Keep crash-recovery autosaves frequent enough to make unexpected-close
+	// recovery useful without coupling the visible document path to autosave files.
+	m_nAutosaveInterval = 60 * 1000;
 #ifdef _MANAGED
 	// If the application is built using Common Language Runtime support (/clr):
 	//     1) This additional setting is needed for Restart Manager support to work properly.
@@ -249,13 +435,87 @@ BOOL CARTestStudioApp::InitInstance()
 	// Parse command line for standard shell commands, DDE, file open
 	CCommandLineInfo cmdInfo;
 	ParseCommandLine(cmdInfo);
+	bool restoredPersistentSession = false;
+	if (cmdInfo.m_nShellCommand == CCommandLineInfo::FileNew)
+	{
+		const CString pendingRestartIdentifier = GetProfileString(
+			RecoveryProfileSection,
+			RecoveryRestartIdentifierEntry);
+		const UINT pendingProcessId = GetProfileInt(
+			RecoveryProfileSection,
+			RecoveryProcessIdEntry,
+			0);
+		const PendingRecoverySession pendingSession{
+			std::wstring{pendingRestartIdentifier.GetString()},
+			static_cast<std::uint32_t>(pendingProcessId)};
+		const PendingRecoveryDisposition disposition =
+			arteststudio::application::EvaluatePendingRecoverySession(
+				pendingSession,
+				static_cast<std::uint32_t>(::GetCurrentProcessId()),
+				IsProcessRunning(pendingProcessId));
+
+		if (disposition == PendingRecoveryDisposition::RecoverPreviousSession)
+		{
+			CDataRecoveryHandler* recoveryHandler = GetDataRecoveryHandler();
+			if (recoveryHandler != nullptr)
+			{
+				const CString currentRestartIdentifier = recoveryHandler->GetRestartIdentifier();
+				recoveryHandler->SetRestartIdentifier(pendingRestartIdentifier);
+				ReportApplicationFault(
+					FaultSeverity::Information,
+					FaultCategory::Storage,
+					L"RECOVERY_UNEXPECTED_CLOSE_DETECTED",
+					L"Restaurar sesion",
+					L"Se detecto una sesion anterior finalizada sin un cierre normal.");
+
+				restoredPersistentSession = RestartInstance() != FALSE;
+				recoveryHandler->SetRestartIdentifier(currentRestartIdentifier);
+				ClearPendingRecoveryProfile();
+
+				ReportApplicationFault(
+					restoredPersistentSession ? FaultSeverity::Information : FaultSeverity::Warning,
+					FaultCategory::Storage,
+					restoredPersistentSession
+						? L"RECOVERY_UNEXPECTED_CLOSE_RESTARTED"
+						: L"RECOVERY_UNEXPECTED_CLOSE_FAILED",
+					L"Restaurar sesion",
+					restoredPersistentSession
+						? L"ARTestStudio proceso la sesion anterior durante el reinicio manual."
+						: L"No fue posible reconstruir la sesion anterior desde el catalogo de autoguardado.");
+			}
+		}
+		else if (disposition == PendingRecoveryDisposition::Invalid)
+		{
+			ClearPendingRecoveryProfile();
+			ReportApplicationFault(
+				FaultSeverity::Warning,
+				FaultCategory::Storage,
+				L"RECOVERY_AUTOSAVE_CATALOG_INVALID",
+				L"Restaurar sesion",
+				L"Se descarto un catalogo de autoguardado incompleto o invalido.");
+		}
+	}
+
+	if (cmdInfo.m_nShellCommand == CCommandLineInfo::RestartByRestartManager)
+	{
+		ReportApplicationFault(
+			FaultSeverity::Information,
+			FaultCategory::Storage,
+			L"RECOVERY_UNEXPECTED_CLOSE_RESTARTED",
+			L"Restaurar sesion",
+			L"Windows Restart Manager reinicio ARTestStudio para restaurar documentos y autosaves.");
+	}
 
 
 
 	// Dispatch commands specified on the command line.  Will return FALSE if
 	// app was launched with /RegServer, /Register, /Unregserver or /Unregister.
-	if (!ProcessShellCommand(cmdInfo))
+	if (!restoredPersistentSession && !ProcessShellCommand(cmdInfo))
 		return FALSE;
+	if (cmdInfo.m_nShellCommand == CCommandLineInfo::RestartByRestartManager)
+	{
+		ClearPendingRecoveryProfile();
+	}
 	// The main window has been initialized, so show and update it
 	pMainFrame->ShowWindow(m_nCmdShow);
 	pMainFrame->UpdateWindow();
@@ -266,9 +526,29 @@ BOOL CARTestStudioApp::InitInstance()
 int CARTestStudioApp::ExitInstance()
 {
 	//TODO: handle additional resources you may have added
+	ClearPendingRecoveryProfileForCurrentProcess();
 	AfxOleTerm(FALSE);
 
 	return CWinAppEx::ExitInstance();
+}
+
+CDataRecoveryHandler* CARTestStudioApp::GetDataRecoveryHandler()
+{
+	if ((SupportsRestartManager() || SupportsApplicationRecovery())
+		&& m_pDataRecoveryHandler == nullptr)
+	{
+		auto* handler = new CPersistentDataRecoveryHandler(
+			m_dwRestartManagerSupportFlags,
+			m_nAutosaveInterval);
+		if (!handler->Initialize())
+		{
+			delete handler;
+			return nullptr;
+		}
+		m_pDataRecoveryHandler = handler;
+	}
+
+	return m_pDataRecoveryHandler;
 }
 
 int CARTestStudioApp::Run()

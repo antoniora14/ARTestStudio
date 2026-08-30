@@ -1,5 +1,7 @@
 #include "../TestSupport/TestSupport.h"
 
+#include "Application/DiagramRecovery.h"
+#include "Application/DiagramRecoveryService.h"
 #include "Application/DiagramStorage.h"
 #include "Domain/DiagramModel.h"
 #include "Infrastructure/TextDiagramStorage.h"
@@ -7,6 +9,8 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -16,6 +20,9 @@ namespace arteststudio::tests
 {
 	using namespace domain;
 	using application::DiagramStorageLimits;
+	using application::DiagramRecoveryService;
+	using application::RecoveryReason;
+	using application::RecoverySource;
 	using application::StorageError;
 	using application::StorageResult;
 	using infrastructure::TextDiagramStorage;
@@ -34,7 +41,7 @@ namespace arteststudio::tests
 		VerifyTestCondition(static_cast<bool>(connection), "The persisted connection must be valid.");
 
 		TemporaryDiagramFile file;
-		const TextDiagramStorage storage;
+		TextDiagramStorage storage;
 		const StorageResult saved = storage.Save(file.Path(), original);
 		VerifyTestCondition(static_cast<bool>(saved), "A valid diagram must be saved.");
 
@@ -461,16 +468,20 @@ namespace arteststudio::tests
 
 		DiagramModel modified;
 		(void)modified.AddNode(NodeKind::Diamond, {60, 60}, L"Replacement content");
-		FailingAtomicFileWriter failingWriter{AtomicWriteError::ReplacementFailure};
+		FailOnDestinationAtomicFileWriter failingWriter{
+			file.Path(), AtomicWriteError::ReplacementFailure};
 		const TextDiagramStorage failingStorage{failingWriter};
 		const StorageResult result = failingStorage.Save(file.Path(), modified);
 
 		VerifyTestCondition(result.error == StorageError::ReplacementFailure,
 			"Replacement failures must be reported specifically.");
-		VerifyTestCondition(failingWriter.calls == 1 && failingWriter.lastDestination == file.Path(),
-			"The diagram storage must delegate one atomic replacement attempt.");
+		VerifyTestCondition(failingWriter.calls == 2,
+			"The storage must secure a backup before attempting the failing replacement.");
 		VerifyTestCondition(ReadFileContents(file.Path()) == originalContents,
 			"A failed replacement must not alter the previous document.");
+		VerifyTestCondition(
+			ReadFileContents(TextDiagramStorage::PreviousVersionPathFor(file.Path())) == originalContents,
+			"A failed replacement must leave a valid recovery copy.");
 	}
 
 	TEST(TextDiagramStorageTests, ReportsTemporaryWriteFailuresSpecifically)
@@ -515,6 +526,306 @@ namespace arteststudio::tests
 			"Serialized diagrams larger than 16 MB must be rejected.");
 		VerifyTestCondition(ReadFileContents(file.Path()) == originalContents,
 			"A size-limit failure must preserve the previous document byte for byte.");
+	}
+
+	TEST(TextDiagramStorageTests, PreservesTheLastValidVersionBeforeEveryReplacement)
+	{
+		TemporaryDiagramFile file;
+		const TextDiagramStorage storage;
+		DiagramModel baseline;
+		(void)baseline.AddNode(NodeKind::Rectangle, {10, 10}, L"Last valid version");
+		VerifyTestCondition(static_cast<bool>(storage.Save(file.Path(), baseline)),
+			"The baseline must be saved.");
+
+		DiagramModel current;
+		(void)current.AddNode(NodeKind::Diamond, {200, 120}, L"Current version");
+		VerifyTestCondition(static_cast<bool>(storage.Save(file.Path(), current)),
+			"The current version must replace the baseline.");
+
+		DiagramModel restoredBackup;
+		const std::filesystem::path backupPath =
+			TextDiagramStorage::PreviousVersionPathFor(file.Path());
+		VerifyTestCondition(static_cast<bool>(storage.Load(backupPath, restoredBackup)),
+			"The previous-version backup must remain a valid diagram.");
+		VerifyTestCondition(
+			restoredBackup.Nodes().size() == 1 &&
+			restoredBackup.Nodes().front().label == L"Last valid version",
+			"The backup must contain the exact prior logical version.");
+	}
+
+	TEST(TextDiagramStorageTests, BackupFailureAbortsTheSaveAndPreservesThePrimary)
+	{
+		TemporaryDiagramFile file;
+		const TextDiagramStorage realStorage;
+		DiagramModel baseline;
+		(void)baseline.AddNode(NodeKind::Rectangle, {15, 15}, L"Protected primary");
+		VerifyTestCondition(static_cast<bool>(realStorage.Save(file.Path(), baseline)),
+			"The protected primary must be saved.");
+		const std::string originalContents = ReadFileContents(file.Path());
+
+		DiagramModel replacement;
+		(void)replacement.AddNode(NodeKind::Diamond, {150, 150}, L"Must not replace");
+		FailingAtomicFileWriter failingWriter{AtomicWriteError::TemporaryWriteFailure};
+		const TextDiagramStorage failingStorage{failingWriter};
+		const StorageResult result = failingStorage.Save(file.Path(), replacement);
+
+		VerifyTestCondition(result.error == StorageError::TemporaryFileFailure,
+			"A backup write failure must be reported before replacement.");
+		VerifyTestCondition(
+			failingWriter.calls == 1 &&
+			failingWriter.lastDestination == TextDiagramStorage::PreviousVersionPathFor(file.Path()),
+			"The failed write must target the recovery backup, not the primary.");
+		VerifyTestCondition(ReadFileContents(file.Path()) == originalContents,
+			"A failed backup must leave the primary byte-for-byte unchanged.");
+	}
+
+	TEST(TextDiagramStorageTests, DetectsAndRecoversANewerInterruptedSave)
+	{
+		TemporaryDiagramFile file;
+		TemporaryDiagramFile candidateFile;
+		const TextDiagramStorage storage;
+
+		DiagramModel baseline;
+		(void)baseline.AddNode(NodeKind::Rectangle, {10, 10}, L"Before interruption");
+		VerifyTestCondition(static_cast<bool>(storage.Save(file.Path(), baseline)),
+			"The baseline must be saved.");
+
+		DiagramModel interrupted;
+		(void)interrupted.AddNode(NodeKind::Diamond, {300, 200}, L"Interrupted but complete");
+		VerifyTestCondition(static_cast<bool>(storage.Save(candidateFile.Path(), interrupted)),
+			"The interrupted-save fixture must be serialized normally.");
+		const std::filesystem::path interruptedPath =
+			TextDiagramStorage::InterruptedSavePathFor(file.Path());
+		{
+			std::ofstream output(interruptedPath, std::ios::binary | std::ios::trunc);
+			const std::string content = ReadFileContents(candidateFile.Path());
+			output.write(content.data(), static_cast<std::streamsize>(content.size()));
+		}
+		const auto now = std::filesystem::file_time_type::clock::now();
+		std::filesystem::last_write_time(file.Path(), now - std::chrono::seconds(10));
+		std::filesystem::last_write_time(interruptedPath, now);
+
+		const application::RecoveryInspection inspection = storage.InspectRecovery(file.Path());
+		VerifyTestCondition(static_cast<bool>(inspection.result) && inspection.candidate.available,
+			"A newer complete temporary file must be offered for recovery.");
+		VerifyTestCondition(
+			inspection.candidate.source == RecoverySource::InterruptedSave &&
+			inspection.candidate.reason == RecoveryReason::CandidateNewer,
+			"The recovery candidate must identify an interrupted newer save.");
+
+		DiagramModel recovered;
+		VerifyTestCondition(
+			static_cast<bool>(storage.Recover(file.Path(), inspection.candidate, recovered)),
+			"The interrupted save must recover transactionally.");
+		VerifyTestCondition(
+			recovered.Nodes().size() == 1 &&
+			recovered.Nodes().front().label == L"Interrupted but complete",
+			"Recovery must return the candidate diagram.");
+		VerifyTestCondition(!std::filesystem::exists(interruptedPath),
+			"The temporary artifact must disappear after successful recovery.");
+
+		DiagramModel reopened;
+		VerifyTestCondition(static_cast<bool>(storage.Load(file.Path(), reopened)) &&
+			reopened.Nodes().front().label == L"Interrupted but complete",
+			"The recovered primary document must be valid on a fresh load.");
+	}
+
+	TEST(TextDiagramStorageTests, RecoversAValidBackupWhenThePrimaryIsCorrupt)
+	{
+		TemporaryDiagramFile file;
+		const TextDiagramStorage storage;
+		DiagramModel baseline;
+		(void)baseline.AddNode(NodeKind::Rectangle, {20, 20}, L"Recoverable baseline");
+		VerifyTestCondition(static_cast<bool>(storage.Save(file.Path(), baseline)),
+			"The baseline must be saved.");
+
+		DiagramModel second;
+		(void)second.AddNode(NodeKind::Diamond, {200, 200}, L"Second version");
+		VerifyTestCondition(static_cast<bool>(storage.Save(file.Path(), second)),
+			"A second save must create the baseline backup.");
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output << "{ truncated";
+		}
+
+		const application::RecoveryInspection inspection = storage.InspectRecovery(file.Path());
+		VerifyTestCondition(inspection.candidate.available &&
+			inspection.candidate.source == RecoverySource::PreviousVersion &&
+			inspection.candidate.reason == RecoveryReason::PrimaryInvalid,
+			"A valid backup must be offered when the primary is corrupt.");
+
+		DiagramModel recovered;
+		VerifyTestCondition(
+			static_cast<bool>(storage.Recover(file.Path(), inspection.candidate, recovered)),
+			"The valid backup must replace the corrupt primary.");
+		VerifyTestCondition(
+			recovered.Nodes().size() == 1 &&
+			recovered.Nodes().front().label == L"Recoverable baseline",
+			"The recovered model must come from the last valid backup.");
+	}
+
+	TEST(TextDiagramStorageTests, IgnoresIncompleteRecoveryArtifacts)
+	{
+		TemporaryDiagramFile file;
+		const TextDiagramStorage storage;
+		DiagramModel baseline;
+		(void)baseline.AddNode(NodeKind::Rectangle, {30, 30}, L"Safe primary");
+		VerifyTestCondition(static_cast<bool>(storage.Save(file.Path(), baseline)),
+			"The primary must be saved.");
+
+		const std::filesystem::path interruptedPath =
+			TextDiagramStorage::InterruptedSavePathFor(file.Path());
+		{
+			std::ofstream output(interruptedPath, std::ios::binary | std::ios::trunc);
+			output << "{ incomplete";
+		}
+		std::filesystem::last_write_time(
+			interruptedPath,
+			std::filesystem::file_time_type::clock::now() + std::chrono::seconds(5));
+
+		const application::RecoveryInspection inspection = storage.InspectRecovery(file.Path());
+		VerifyTestCondition(static_cast<bool>(inspection.result),
+			"An invalid artifact must not make recovery inspection fail.");
+		VerifyTestCondition(!inspection.candidate.available &&
+			inspection.invalidInterruptedSaveDetected,
+			"An incomplete temporary file must be detected but never offered.");
+
+		DiagramModel loaded;
+		VerifyTestCondition(static_cast<bool>(storage.Load(file.Path(), loaded)) &&
+			loaded.Nodes().front().label == L"Safe primary",
+			"The valid primary must remain usable.");
+	}
+
+	TEST(TextDiagramStorageTests, FailedInterruptedRecoveryKeepsADurableCandidate)
+	{
+		TemporaryDiagramFile file;
+		TemporaryDiagramFile candidateFile;
+		const TextDiagramStorage realStorage;
+		DiagramModel baseline;
+		(void)baseline.AddNode(NodeKind::Rectangle, {35, 35}, L"Primary before failed recovery");
+		VerifyTestCondition(static_cast<bool>(realStorage.Save(file.Path(), baseline)),
+			"The primary must be saved.");
+		const std::string originalContents = ReadFileContents(file.Path());
+
+		DiagramModel interrupted;
+		(void)interrupted.AddNode(NodeKind::Diamond, {350, 250}, L"Durable interrupted candidate");
+		VerifyTestCondition(static_cast<bool>(realStorage.Save(candidateFile.Path(), interrupted)),
+			"The recovery candidate must be serialized.");
+		const std::string candidateContents = ReadFileContents(candidateFile.Path());
+		const std::filesystem::path interruptedPath =
+			TextDiagramStorage::InterruptedSavePathFor(file.Path());
+		{
+			std::ofstream output(interruptedPath, std::ios::binary | std::ios::trunc);
+			output.write(candidateContents.data(), static_cast<std::streamsize>(candidateContents.size()));
+		}
+		const auto now = std::filesystem::file_time_type::clock::now();
+		std::filesystem::last_write_time(file.Path(), now - std::chrono::seconds(10));
+		std::filesystem::last_write_time(interruptedPath, now);
+
+		FailOnDestinationAtomicFileWriter failingWriter{
+			file.Path(), AtomicWriteError::ReplacementFailure};
+		const TextDiagramStorage failingStorage{failingWriter};
+		const application::RecoveryInspection inspection =
+			failingStorage.InspectRecovery(file.Path());
+		DiagramModel active;
+		const NodeId activeNode =
+			active.AddNode(NodeKind::Rectangle, {1, 1}, L"Active remains unchanged");
+		const StorageResult result =
+			failingStorage.Recover(file.Path(), inspection.candidate, active);
+
+		VerifyTestCondition(result.error == StorageError::ReplacementFailure,
+			"The simulated recovery replacement failure must be reported.");
+		VerifyTestCondition(ReadFileContents(file.Path()) == originalContents,
+			"A failed recovery must preserve the original primary.");
+		VerifyTestCondition(
+			ReadFileContents(TextDiagramStorage::PreviousVersionPathFor(file.Path())) ==
+				candidateContents,
+			"The interrupted candidate must be secured durably before replacement.");
+		VerifyTestCondition(active.FindNode(activeNode) != nullptr &&
+			active.Nodes().front().label == L"Active remains unchanged",
+			"A failed recovery must not mutate the active model.");
+	}
+
+	TEST(TextDiagramStorageTests, RecoveryOperationsAreReportedThroughFaultService)
+	{
+		TemporaryDiagramFile file;
+		TextDiagramStorage storage;
+		DiagramModel baseline;
+		(void)baseline.AddNode(NodeKind::Rectangle, {40, 40}, L"Logged recovery");
+		VerifyTestCondition(static_cast<bool>(storage.Save(file.Path(), baseline)),
+			"The baseline must be saved.");
+
+		const std::filesystem::path backupPath =
+			TextDiagramStorage::PreviousVersionPathFor(file.Path());
+		{
+			std::ofstream output(backupPath, std::ios::binary | std::ios::trunc);
+			const std::string content = ReadFileContents(file.Path());
+			output.write(content.data(), static_cast<std::streamsize>(content.size()));
+		}
+		{
+			std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+			output << "corrupt";
+		}
+
+		RecordingFaultReporter reporter;
+		FaultReporterScope reporterScope{&reporter};
+		DiagramRecoveryService recoveryService{storage};
+		const application::RecoveryInspection inspection = recoveryService.Inspect(file.Path());
+		VerifyTestCondition(inspection.candidate.available,
+			"The logging test requires a recovery candidate.");
+
+		DiagramModel recovered;
+		VerifyTestCondition(static_cast<bool>(
+			recoveryService.Recover(file.Path(), inspection.candidate, recovered)),
+			"The logged recovery must complete.");
+		VerifyTestCondition(
+			std::find(reporter.codes.begin(), reporter.codes.end(), L"RECOVERY_CANDIDATE_DETECTED") !=
+				reporter.codes.end() &&
+			std::find(reporter.codes.begin(), reporter.codes.end(), L"RECOVERY_STARTED") !=
+				reporter.codes.end() &&
+			std::find(reporter.codes.begin(), reporter.codes.end(), L"RECOVERY_COMPLETED") !=
+				reporter.codes.end(),
+			"Detection, start, and completion must all be routed through FaultService.");
+	}
+
+	TEST(TextDiagramStorageTests, DeclinedRecoveryIsReportedThroughFaultService)
+	{
+		TemporaryDiagramFile file;
+		TextDiagramStorage storage;
+		RecordingFaultReporter reporter;
+		FaultReporterScope reporterScope{&reporter};
+		DiagramRecoveryService recoveryService{storage};
+		const application::RecoveryCandidate candidate{
+			true,
+			RecoverySource::PreviousVersion,
+			RecoveryReason::PrimaryInvalid,
+			TextDiagramStorage::PreviousVersionPathFor(file.Path())};
+
+		recoveryService.RecordDeclined(file.Path(), candidate);
+
+		VerifyTestCondition(
+			reporter.count == 1 && reporter.lastCode == L"RECOVERY_DECLINED",
+			"Declining a recovery must be recorded explicitly.");
+	}
+
+	TEST(TextDiagramStorageTests, CancelledRecoveryIsReportedThroughFaultService)
+	{
+		TemporaryDiagramFile file;
+		TextDiagramStorage storage;
+		RecordingFaultReporter reporter;
+		FaultReporterScope reporterScope{&reporter};
+		DiagramRecoveryService recoveryService{storage};
+		const application::RecoveryCandidate candidate{
+			true,
+			RecoverySource::InterruptedSave,
+			RecoveryReason::CandidateNewer,
+			TextDiagramStorage::InterruptedSavePathFor(file.Path())};
+
+		recoveryService.RecordCancelled(file.Path(), candidate);
+
+		VerifyTestCondition(
+			reporter.count == 1 && reporter.lastCode == L"RECOVERY_CANCELLED",
+			"Cancelling a recovery must be recorded explicitly.");
 	}
 
 

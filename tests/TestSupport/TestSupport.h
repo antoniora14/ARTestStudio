@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace arteststudio::tests
 {
@@ -61,6 +62,9 @@ namespace arteststudio::tests
 			const std::filesystem::path previousPath = m_path.parent_path() /
 				(m_path.stem().wstring() + L".previous" + m_path.extension().wstring());
 			std::filesystem::remove(previousPath, error);
+			std::filesystem::path previousTemporaryPath = previousPath;
+			previousTemporaryPath += L".tmp";
+			std::filesystem::remove(previousTemporaryPath, error);
 		}
 
 		[[nodiscard]] const std::filesystem::path& Path() const noexcept
@@ -81,12 +85,14 @@ namespace arteststudio::tests
 			lastSeverity = fault.severity;
 			lastCode = fault.code;
 			lastOperation = fault.operation;
+			codes.push_back(fault.code);
 		}
 
 		int count = 0;
 		FaultSeverity lastSeverity = FaultSeverity::Information;
 		std::wstring lastCode;
 		std::wstring lastOperation;
+		std::vector<std::wstring> codes;
 	};
 
 	class FailingAtomicFileWriter final : public IAtomicFileWriter
@@ -112,6 +118,54 @@ namespace arteststudio::tests
 		mutable std::size_t lastContentSize = 0;
 
 	private:
+		AtomicWriteError m_error;
+	};
+
+	class FailOnDestinationAtomicFileWriter final : public IAtomicFileWriter
+	{
+	public:
+		FailOnDestinationAtomicFileWriter(
+			std::filesystem::path destination,
+			AtomicWriteError error)
+			: m_destination(std::move(destination)),
+			  m_error(error)
+		{
+		}
+
+		[[nodiscard]] AtomicWriteResult Write(
+			const std::filesystem::path& destination,
+			std::string_view content) const noexcept override
+		{
+			++calls;
+			if (destination == m_destination)
+			{
+				return {m_error, L"Fallo simulado al reemplazar el destino."};
+			}
+
+			try
+			{
+				std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+				if (!output)
+				{
+					return {AtomicWriteError::TemporaryWriteFailure, L"No se pudo escribir el respaldo simulado."};
+				}
+				output.write(content.data(), static_cast<std::streamsize>(content.size()));
+				if (!output)
+				{
+					return {AtomicWriteError::TemporaryWriteFailure, L"El respaldo simulado quedo incompleto."};
+				}
+				return {};
+			}
+			catch (...)
+			{
+				return {AtomicWriteError::TemporaryWriteFailure, L"Fallo inesperado del escritor simulado."};
+			}
+		}
+
+		mutable int calls = 0;
+
+	private:
+		std::filesystem::path m_destination;
 		AtomicWriteError m_error;
 	};
 

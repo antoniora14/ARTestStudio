@@ -216,12 +216,15 @@
     <ClInclude Include="Domain\DiagramHitTesting.h" />
     <ClInclude Include="Domain\OrthogonalRouter.h" />
     <ClInclude Include="Application\AtomicFileWriter.h" />
+    <ClInclude Include="Application\DiagramRecovery.h" />
+    <ClInclude Include="Application\DiagramRecoveryService.h" />
     <ClInclude Include="Application\DiagramSerializer.h" />
     <ClInclude Include="Application\DiagramStorage.h" />
     <ClInclude Include="Application\EditCommand.h" />
     <ClInclude Include="Application\FaultService.h" />
     <ClInclude Include="Application\InteractionController.h" />
     <ClInclude Include="Application\SelectionModel.h" />
+    <ClInclude Include="Application\UnexpectedCloseRecovery.h" />
     <ClInclude Include="Infrastructure\TextDiagramStorage.h" />
     <ClInclude Include="Infrastructure\DiagramDocumentDto.h" />
     <ClInclude Include="Infrastructure\DiagramSerializationSupport.h" />
@@ -267,6 +270,12 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Application\InteractionController.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Application\UnexpectedCloseRecovery.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Application\DiagramRecoveryService.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Infrastructure\TextDiagramStorage.cpp">
