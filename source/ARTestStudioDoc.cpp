@@ -56,15 +56,15 @@ namespace
 		const std::filesystem::path& destination,
 		const RecoveryCandidate& candidate)
 	{
-		std::wstring message = L"ARTestStudio encontro una copia de recuperacion valida para:\n\n";
+		std::wstring message = L"ARTestStudio found a valid recovery copy for:\n\n";
 		message += destination.native();
-		message += L"\n\nOrigen: ";
+		message += L"\n\nSource: ";
 		message += DescribeRecoverySource(candidate.source);
-		message += L".\nMotivo: ";
+		message += L".\nReason: ";
 		message += DescribeRecoveryReason(candidate.reason);
-		message += L".\n\nSi: recuperar la copia y reemplazar el documento principal.";
-		message += L"\nNo: intentar abrir el documento principal sin recuperarlo.";
-		message += L"\nCancelar: no abrir el documento.";
+		message += L".\n\nYes: recover the copy and replace the primary document.";
+		message += L"\nNo: attempt to open the primary document without recovery.";
+		message += L"\nCancel: do not open the document.";
 		return AfxMessageBox(message.c_str(), MB_YESNOCANCEL | MB_ICONWARNING);
 	}
 
@@ -73,9 +73,9 @@ namespace
 		const std::filesystem::path& path,
 		const StorageResult& result)
 	{
-		std::wstring message = L"No se pudo ";
+		std::wstring message = L"Could not ";
 		message.append(operation);
-		message += L" el diagrama";
+		message += L" the diagram";
 		if (!path.empty())
 		{
 			message += L":\n";
@@ -92,7 +92,7 @@ namespace
 		std::wstring technicalDetail;
 		if (!path.empty())
 		{
-			technicalDetail = L"Ruta: ";
+			technicalDetail = L"Path: ";
 			technicalDetail += path.native();
 		}
 		if (!result.detail.empty())
@@ -165,7 +165,7 @@ BOOL CARTestStudioDoc::OnOpenDocument(LPCTSTR lpszPathName)
 	if (path.empty())
 	{
 		const StorageResult result{arteststudio::application::StorageError::InvalidPath};
-		ReportStorageFailure(L"abrir", path, result);
+		ReportStorageFailure(L"open", path, result);
 		return FALSE;
 	}
 
@@ -197,7 +197,7 @@ BOOL CARTestStudioDoc::OnOpenDocument(LPCTSTR lpszPathName)
 	}
 	if (!result)
 	{
-		ReportStorageFailure(L"abrir", path, result);
+		ReportStorageFailure(L"open", path, result);
 		return FALSE;
 	}
 
@@ -218,7 +218,7 @@ BOOL CARTestStudioDoc::OnSaveDocument(LPCTSTR lpszPathName)
 	const StorageResult result = GetDiagramStorage().Save(path, m_diagram);
 	if (!result)
 	{
-		ReportStorageFailure(L"guardar", path, result);
+		ReportStorageFailure(L"save", path, result);
 		return FALSE;
 	}
 

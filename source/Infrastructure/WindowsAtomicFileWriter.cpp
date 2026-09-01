@@ -16,7 +16,7 @@ namespace arteststudio::infrastructure
 
 		[[nodiscard]] AtomicWriteResult Failure(AtomicWriteError error, DWORD systemError)
 		{
-			return {error, L"Windows reporto el codigo " + std::to_wstring(systemError) + L"."};
+			return {error, L"Windows reported error code " + std::to_wstring(systemError) + L"."};
 		}
 
 		[[nodiscard]] bool IsAccessDenied(DWORD error) noexcept
@@ -45,7 +45,7 @@ namespace arteststudio::infrastructure
 	{
 		if (destination.empty() || destination.filename().empty())
 		{
-			return {AtomicWriteError::InvalidPath, L"La ruta de destino no es valida."};
+			return {AtomicWriteError::InvalidPath, L"The destination path is invalid."};
 		}
 
 		try
@@ -123,11 +123,11 @@ namespace arteststudio::infrastructure
 		}
 		catch (const std::bad_alloc&)
 		{
-			return {AtomicWriteError::TemporaryWriteFailure, L"No hay memoria suficiente para completar la escritura."};
+			return {AtomicWriteError::TemporaryWriteFailure, L"Insufficient memory to complete the write operation."};
 		}
 		catch (...)
 		{
-			return {AtomicWriteError::TemporaryWriteFailure, L"Ocurrio un error inesperado durante la escritura atomica."};
+			return {AtomicWriteError::TemporaryWriteFailure, L"An unexpected error occurred during the atomic write operation."};
 		}
 	}
 }

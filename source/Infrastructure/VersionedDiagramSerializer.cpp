@@ -41,6 +41,6 @@ namespace arteststudio::infrastructure
 		}
 		return serialization::Failure(
 			application::StorageError::InvalidFormat,
-			L"El archivo no contiene un documento JSON v2 ni un diagrama legacy v1 reconocido.");
+			L"The file contains neither a recognized JSON v2 document nor a legacy v1 diagram.");
 	}
 }

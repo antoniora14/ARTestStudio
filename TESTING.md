@@ -1,76 +1,77 @@
-# Pruebas automatizadas de ARTestStudio
+# ARTestStudio Automated Tests
 
-## Estructura
+## Structure
 
-El proyecto `tests/ARTestStudio.UnitTests.vcxproj` usa Google Test 1.18 y se
-incluye en `source/ARTestStudio.sln`.
+The `tests/ARTestStudio.UnitTests.vcxproj` project uses Google Test 1.18 and is
+included in `source/ARTestStudio.sln`.
 
-- `Domain/DiagramModelTests.cpp`: invariantes, identificadores y conexiones.
-- `Domain/OrthogonalRouterTests.cpp`: rutas ortogonales y evasion de bloques.
-- `Application/FaultServiceTests.cpp`: frontera y delegacion de fallos.
-- `Application/InteractionControllerTests.cpp`: estados de interaccion,
-  seleccion y undo/redo.
-- `Application/UnexpectedCloseRecoveryTests.cpp`: validacion del catalogo de
-  sesion y deteccion segura de un proceso anterior finalizado.
-- `Infrastructure/TextDiagramStorageTests.cpp`: formato `.atd`, limites y
-  guardado atomico.
-- `Infrastructure/FileFaultReporterTests.cpp`: escritura y rotacion de logs.
-- `TestSupport/TestSupport.h`: archivos temporales y dobles compartidos.
+- `Domain/DiagramModelTests.cpp`: invariants, identifiers, and connections.
+- `Domain/OrthogonalRouterTests.cpp`: orthogonal routes and node avoidance.
+- `Application/FaultServiceTests.cpp`: fault-reporting boundary and delegation.
+- `Application/InteractionControllerTests.cpp`: interaction states, selection,
+  and undo/redo.
+- `Application/UnexpectedCloseRecoveryTests.cpp`: session-catalog validation and
+  safe detection of a previously terminated process.
+- `Infrastructure/TextDiagramStorageTests.cpp`: `.atd` format, limits, and atomic
+  saving.
+- `Infrastructure/FileFaultReporterTests.cpp`: log writes and rotation.
+- `TestSupport/TestSupport.h`: temporary files and shared test doubles.
 
-Actualmente existen 57 casos distribuidos en 7 suites.
+There are currently 57 test cases across 7 suites.
 
-## Ejecutar desde la terminal
+## Running from the terminal
 
-Desde la raiz del repositorio:
+From the repository root:
 
 ```powershell
 .\scripts\build.ps1 -Configuration Debug -Platform x64
 ```
 
-Para la validacion previa a una entrega:
+For pre-release validation:
 
 ```powershell
 .\scripts\build.ps1 -Configuration Release -Platform x64
 ```
 
-El comando devuelve un codigo distinto de cero si falla la compilacion, alguna
-prueba, la validacion de veredictos o la generacion del reporte.
+The command returns a nonzero exit code when the build, any test, verdict
+validation, or report generation fails.
 
-## Ejecutar desde Visual Studio Test Explorer
+## Running from Visual Studio Test Explorer
 
-1. Abrir `source/ARTestStudio.sln` con Visual Studio Insiders.
-2. Seleccionar la plataforma `x64` y la configuracion `Debug` o `Release`.
-3. Abrir **Test > Test Explorer**.
-4. Compilar la solucion con **Build > Build Solution**.
-5. Esperar a que aparezcan 57 pruebas bajo las suites de Google Test.
-6. Elegir **Run All Tests** o ejecutar una suite o caso individual.
+1. Open `source/ARTestStudio.sln` with Visual Studio Insiders.
+2. Select the `x64` platform and either the `Debug` or `Release` configuration.
+3. Open **Test > Test Explorer**.
+4. Build the solution with **Build > Build Solution**.
+5. Wait for 57 tests to appear under the Google Test suites.
+6. Select **Run All Tests**, or run an individual suite or test case.
 
-El adaptador de Google Test forma parte de la carga de trabajo de C++ de Visual
-Studio. No se necesita instalar una extension adicional en esta configuracion.
+The Google Test adapter is included in Visual Studio's C++ workload. No
+additional extension is required for this configuration.
 
-## Reportes
+## Reports
 
-Cada ejecucion de `scripts/build.ps1` genera:
+Each `scripts/build.ps1` run generates:
 
 - `artifacts/test-results/<Platform>/<Configuration>/ARTestStudio.UnitTests.xml`:
-  resultado nativo de Google Test para integracion continua.
+  native Google Test output for continuous integration.
 - `artifacts/test-results/<Platform>/<Configuration>/ARTestStudio.UnitTests.html`:
-  resumen visual con suite, caso, estado, duracion y detalle de fallos.
+  a visual summary containing suite, test case, status, duration, and failure
+  details.
 
-Los reportes son artefactos locales y estan excluidos de Git. Deben adjuntarse
-como evidencia cuando una implementacion requiera trazabilidad automatizada.
+Reports are local artifacts and are excluded from Git. Attach them as evidence
+when an implementation requires automated traceability.
 
-Antes de generar el reporte real, el flujo ejecuta una regresion del generador
-con casos sinteticos `PASSED`, `FAILED` y `SKIPPED`. Ademas, cada reporte
-compara la cantidad de casos y fallos declarada en la raiz del XML contra los
-veredictos calculados por caso. Si ambos niveles no coinciden, el reporte no se
-genera y la compilacion termina con error.
+Before generating the actual report, the workflow runs a regression test for
+the report generator using synthetic `PASSED`, `FAILED`, and `SKIPPED` cases.
+Each report also compares the test and failure counts declared at the XML root
+with the verdicts calculated per test case. If the two levels disagree, the
+report is not generated and the build terminates with an error.
 
-## Agregar un caso
+## Adding a test case
 
-1. Elegir el archivo de la capa responsable.
-2. Declarar el caso con `TEST(NombreDeSuite, ComportamientoEsperado)`.
-3. Mantener el arreglo, archivo o servicio temporal dentro del propio caso.
-4. Ejecutar Debug y Release antes de cerrar el feature.
-5. Confirmar que el nuevo caso aparece tanto en Test Explorer como en los
-   reportes XML y HTML.
+1. Select the file that corresponds to the responsible layer.
+2. Declare the case with `TEST(SuiteName, ExpectedBehavior)`.
+3. Keep the temporary arrangement, file, or service scoped to the test case.
+4. Run both Debug and Release before completing the feature.
+5. Confirm that the new case appears in Test Explorer and in both the XML and
+   HTML reports.

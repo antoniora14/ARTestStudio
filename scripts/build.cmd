@@ -5,10 +5,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0build.ps1" %*
 
 if errorlevel 1 (
     echo.
-    echo La compilacion fallo.
+    echo The build failed.
     exit /b 1
 )
 
 echo.
-echo Compilacion y pruebas completadas correctamente.
+echo Build and tests completed successfully.
 exit /b 0

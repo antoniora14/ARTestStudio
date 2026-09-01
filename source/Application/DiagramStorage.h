@@ -53,36 +53,36 @@ namespace arteststudio::application
 		switch (error)
 		{
 		case StorageError::None:
-			return L"La operacion se completo correctamente.";
+			return L"The operation completed successfully.";
 		case StorageError::InvalidPath:
-			return L"La ruta del documento no es valida.";
+			return L"The document path is invalid.";
 		case StorageError::UnsupportedFileExtension:
-			return L"La extension no corresponde a un diagrama de ARTestStudio (.atd).";
+			return L"The file extension is not valid for an ARTestStudio diagram (.atd).";
 		case StorageError::FileNotFound:
-			return L"No se encontro el archivo solicitado.";
+			return L"The requested file was not found.";
 		case StorageError::AccessDenied:
-			return L"No hay permisos suficientes para acceder al archivo.";
+			return L"Insufficient permissions to access the file.";
 		case StorageError::IoFailure:
-			return L"Ocurrio un error de entrada o salida.";
+			return L"An input/output error occurred.";
 		case StorageError::InvalidFormat:
-			return L"El archivo no tiene un formato de ARTestStudio valido.";
+			return L"The file does not contain a valid ARTestStudio format.";
 		case StorageError::UnsupportedVersion:
-			return L"La version del archivo no es compatible con esta aplicacion.";
+			return L"The file version is not supported by this application.";
 		case StorageError::InvalidData:
-			return L"El archivo contiene datos de diagrama invalidos.";
+			return L"The file contains invalid diagram data.";
 		case StorageError::InvalidEncoding:
-			return L"El archivo contiene texto que no es UTF-8 valido.";
+			return L"The file contains invalid UTF-8 text.";
 		case StorageError::FileTooLarge:
-			return L"El archivo excede el limite permitido de 16 MB.";
+			return L"The file exceeds the 16 MB size limit.";
 		case StorageError::DataLimitExceeded:
-			return L"El diagrama excede uno de los limites de seguridad permitidos.";
+			return L"The diagram exceeds one or more security limits.";
 		case StorageError::TemporaryFileFailure:
-			return L"No se pudo preparar o escribir el archivo temporal de guardado.";
+			return L"The temporary save file could not be prepared or written.";
 		case StorageError::ReplacementFailure:
-			return L"No se pudo reemplazar el documento anterior; su contenido se conservo.";
+			return L"The previous document could not be replaced; its contents were preserved.";
 		}
 
-		return L"Ocurrio un error desconocido.";
+		return L"An unknown error occurred.";
 	}
 
 	class IDiagramStorage

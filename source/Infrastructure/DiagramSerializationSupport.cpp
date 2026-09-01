@@ -47,7 +47,7 @@ namespace arteststudio::infrastructure::serialization
 		}
 		if (value.size() > static_cast<std::size_t>((std::numeric_limits<int>::max)()))
 		{
-			return Failure(StorageError::InvalidEncoding, L"La etiqueta es demasiado grande.");
+			return Failure(StorageError::InvalidEncoding, L"The label is too large.");
 		}
 
 		const int required = WideCharToMultiByte(
@@ -55,7 +55,7 @@ namespace arteststudio::infrastructure::serialization
 			nullptr, 0, nullptr, nullptr);
 		if (required <= 0)
 		{
-			return Failure(StorageError::InvalidEncoding, L"No se pudo convertir una etiqueta a UTF-8.");
+			return Failure(StorageError::InvalidEncoding, L"A label could not be converted to UTF-8.");
 		}
 
 		output.resize(static_cast<std::size_t>(required));
@@ -64,7 +64,7 @@ namespace arteststudio::infrastructure::serialization
 			output.data(), required, nullptr, nullptr) != required)
 		{
 			output.clear();
-			return Failure(StorageError::InvalidEncoding, L"No se pudo convertir una etiqueta a UTF-8.");
+			return Failure(StorageError::InvalidEncoding, L"A label could not be converted to UTF-8.");
 		}
 		return {};
 	}
@@ -78,14 +78,14 @@ namespace arteststudio::infrastructure::serialization
 		}
 		if (value.size() > static_cast<std::size_t>((std::numeric_limits<int>::max)()))
 		{
-			return Failure(StorageError::InvalidEncoding, L"La etiqueta es demasiado grande.");
+			return Failure(StorageError::InvalidEncoding, L"The label is too large.");
 		}
 
 		const int required = MultiByteToWideChar(
 			CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()), nullptr, 0);
 		if (required <= 0)
 		{
-			return Failure(StorageError::InvalidEncoding, L"El archivo contiene una etiqueta UTF-8 invalida.");
+			return Failure(StorageError::InvalidEncoding, L"The file contains an invalid UTF-8 label.");
 		}
 
 		output.resize(static_cast<std::size_t>(required));
@@ -94,7 +94,7 @@ namespace arteststudio::infrastructure::serialization
 			output.data(), required) != required)
 		{
 			output.clear();
-			return Failure(StorageError::InvalidEncoding, L"El archivo contiene una etiqueta UTF-8 invalida.");
+			return Failure(StorageError::InvalidEncoding, L"The file contains an invalid UTF-8 label.");
 		}
 		return {};
 	}
@@ -107,12 +107,12 @@ namespace arteststudio::infrastructure::serialization
 		}
 		if (value.size() > static_cast<std::size_t>((std::numeric_limits<int>::max)()))
 		{
-			return Failure(StorageError::InvalidEncoding, L"El contenido UTF-8 es demasiado grande.");
+			return Failure(StorageError::InvalidEncoding, L"The UTF-8 content is too large.");
 		}
 		if (MultiByteToWideChar(
 			CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()), nullptr, 0) <= 0)
 		{
-			return Failure(StorageError::InvalidEncoding, L"El documento contiene bytes que no forman UTF-8 valido.");
+			return Failure(StorageError::InvalidEncoding, L"The document contains an invalid UTF-8 byte sequence.");
 		}
 		return {};
 	}
@@ -123,37 +123,37 @@ namespace arteststudio::infrastructure::serialization
 		switch (result.error)
 		{
 		case DiagramSnapshotError::InvalidNodeId:
-			detail = L"El snapshot contiene un identificador de bloque invalido.";
+			detail = L"The snapshot contains an invalid node identifier.";
 			break;
 		case DiagramSnapshotError::DuplicateNodeId:
-			detail = L"El snapshot contiene un identificador de bloque duplicado.";
+			detail = L"The snapshot contains a duplicate node identifier.";
 			break;
 		case DiagramSnapshotError::InvalidNodeKind:
-			detail = L"El snapshot contiene un tipo de bloque invalido.";
+			detail = L"The snapshot contains an invalid node kind.";
 			break;
 		case DiagramSnapshotError::InvalidNodeDimensions:
-			detail = L"El snapshot contiene dimensiones de bloque invalidas.";
+			detail = L"The snapshot contains invalid node dimensions.";
 			break;
 		case DiagramSnapshotError::InvalidConnectionId:
-			detail = L"El snapshot contiene un identificador de conexion invalido.";
+			detail = L"The snapshot contains an invalid connection identifier.";
 			break;
 		case DiagramSnapshotError::DuplicateConnectionId:
-			detail = L"El snapshot contiene un identificador de conexion duplicado.";
+			detail = L"The snapshot contains a duplicate connection identifier.";
 			break;
 		case DiagramSnapshotError::NodeNotFound:
-			detail = L"Una conexion del snapshot referencia un bloque inexistente.";
+			detail = L"A snapshot connection references a missing node.";
 			break;
 		case DiagramSnapshotError::InvalidPort:
-			detail = L"Una conexion del snapshot utiliza un puerto invalido.";
+			detail = L"A snapshot connection uses an invalid port.";
 			break;
 		case DiagramSnapshotError::IdentifierOverflow:
-			detail = L"Un identificador no permite generar el siguiente valor de forma segura.";
+			detail = L"An identifier does not allow the next value to be generated safely.";
 			break;
 		case DiagramSnapshotError::AllocationFailure:
-			detail = L"No hay memoria suficiente para validar el snapshot.";
+			detail = L"Insufficient memory to validate the snapshot.";
 			break;
 		case DiagramSnapshotError::UnexpectedFailure:
-			detail = L"Ocurrio un error inesperado al validar el snapshot.";
+			detail = L"An unexpected error occurred while validating the snapshot.";
 			break;
 		case DiagramSnapshotError::None:
 			return {};
@@ -177,7 +177,7 @@ namespace arteststudio::infrastructure::serialization
 		}
 		if (snapshot.nodes.size() > kMaximumNodes || snapshot.connections.size() > kMaximumConnections)
 		{
-			return Failure(StorageError::DataLimitExceeded, L"El diagrama contiene demasiados elementos.");
+			return Failure(StorageError::DataLimitExceeded, L"The diagram contains too many elements.");
 		}
 
 		for (const domain::Node& node : snapshot.nodes)
@@ -186,7 +186,7 @@ namespace arteststudio::infrastructure::serialization
 				!IsDimensionValid(node.width) || !IsDimensionValid(node.height) ||
 				(node.kind != NodeKind::Rectangle && node.kind != NodeKind::Diamond))
 			{
-				return Failure(StorageError::InvalidData, L"El modelo contiene un bloque invalido.");
+				return Failure(StorageError::InvalidData, L"The model contains an invalid node.");
 			}
 
 			std::string label;
@@ -197,7 +197,7 @@ namespace arteststudio::infrastructure::serialization
 			}
 			if (label.size() > DiagramStorageLimits::MaximumLabelBytes)
 			{
-				return Failure(StorageError::DataLimitExceeded, L"Una etiqueta excede el limite de 64 KB.");
+				return Failure(StorageError::DataLimitExceeded, L"A label exceeds the 64 KB limit.");
 			}
 		}
 
@@ -205,13 +205,13 @@ namespace arteststudio::infrastructure::serialization
 		{
 			if (connection.intermediatePoints.size() > kMaximumRoutePoints)
 			{
-				return Failure(StorageError::DataLimitExceeded, L"Una conexion contiene demasiados puntos de ruta.");
+				return Failure(StorageError::DataLimitExceeded, L"A connection contains too many route points.");
 			}
 			for (const domain::Point point : connection.intermediatePoints)
 			{
 				if (!IsCoordinateValid(point.x) || !IsCoordinateValid(point.y))
 				{
-					return Failure(StorageError::InvalidData, L"Una ruta contiene coordenadas invalidas.");
+					return Failure(StorageError::InvalidData, L"A route contains invalid coordinates.");
 				}
 			}
 		}

@@ -29,7 +29,7 @@ void CDiamondNode::Draw(CDC* pDC)
     };
     pDC->Polygon(pts, 4);
 
-    // Opcional: dibujar círculos pequeños en los puntos de conexión para visualizarlos
+    // Optionally draw small circles at the connection points for visualization.
     for (int i = 0; i < 4; ++i)
     {
         CPoint pt = GetConnectionPoint(i);
@@ -51,7 +51,7 @@ CPoint CDiamondNode::GetConnectionPoint(int index) const
 
 bool CDiamondNode::HitTest(CPoint pt) const
 {
-    // Usamos el rectángulo contenedor para simplificar la prueba
+    // Use the bounding rectangle to simplify hit testing.
     CRect bounds(center.x - m_W, center.y - m_H, center.x + m_W, center.y + m_H);
     return bounds.PtInRect(pt);
 }
@@ -94,7 +94,7 @@ void CRectangleNode::Draw(CDC* pDC)
     pDC->Rectangle(&rect);
     pDC->DrawText(labelText, rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
-    // Dibujar puntos de conexión
+    // Draw connection points.
     for (int i = 0; i < 4; ++i)
     {
         CPoint pt = GetConnectionPoint(i);

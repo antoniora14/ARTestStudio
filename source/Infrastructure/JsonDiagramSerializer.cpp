@@ -97,7 +97,7 @@ namespace arteststudio::infrastructure
 			if (iterator == object.end() ||
 				(!iterator->is_number_unsigned() && !iterator->is_number_integer()))
 			{
-				return Failure(StorageError::InvalidData, L"Falta un identificador numerico valido en el JSON.");
+				return Failure(StorageError::InvalidData, L"The JSON is missing a valid numeric identifier.");
 			}
 			if (iterator->is_number_unsigned())
 			{
@@ -107,7 +107,7 @@ namespace arteststudio::infrastructure
 			const std::int64_t signedValue = iterator->get<std::int64_t>();
 			if (signedValue < 0)
 			{
-				return Failure(StorageError::InvalidData, L"Un identificador JSON no puede ser negativo.");
+				return Failure(StorageError::InvalidData, L"A JSON identifier cannot be negative.");
 			}
 			output = static_cast<std::uint64_t>(signedValue);
 			return {};
@@ -119,7 +119,7 @@ namespace arteststudio::infrastructure
 			if (iterator == object.end() ||
 				(!iterator->is_number_integer() && !iterator->is_number_unsigned()))
 			{
-				return Failure(StorageError::InvalidData, L"Falta un valor entero valido en el JSON.");
+				return Failure(StorageError::InvalidData, L"The JSON is missing a valid integer value.");
 			}
 
 			if (iterator->is_number_unsigned())
@@ -127,7 +127,7 @@ namespace arteststudio::infrastructure
 				const std::uint64_t value = iterator->get<std::uint64_t>();
 				if (value > static_cast<std::uint64_t>((std::numeric_limits<int>::max)()))
 				{
-					return Failure(StorageError::InvalidData, L"Un entero JSON esta fuera del rango permitido.");
+					return Failure(StorageError::InvalidData, L"A JSON integer is outside the supported range.");
 				}
 				output = static_cast<int>(value);
 				return {};
@@ -136,7 +136,7 @@ namespace arteststudio::infrastructure
 			const std::int64_t value = iterator->get<std::int64_t>();
 			if (value < (std::numeric_limits<int>::min)() || value > (std::numeric_limits<int>::max)())
 			{
-				return Failure(StorageError::InvalidData, L"Un entero JSON esta fuera del rango permitido.");
+				return Failure(StorageError::InvalidData, L"A JSON integer is outside the supported range.");
 			}
 			output = static_cast<int>(value);
 			return {};
@@ -151,12 +151,12 @@ namespace arteststudio::infrastructure
 			const auto iterator = object.find(field);
 			if (iterator == object.end() || !iterator->is_string())
 			{
-				return Failure(StorageError::InvalidData, L"Falta un texto requerido en el JSON.");
+				return Failure(StorageError::InvalidData, L"The JSON is missing a required string value.");
 			}
 			output = iterator->get<std::string>();
 			if (output.size() > maximumBytes)
 			{
-				return Failure(StorageError::DataLimitExceeded, L"Un texto JSON excede el limite permitido.");
+				return Failure(StorageError::DataLimitExceeded, L"A JSON string exceeds the permitted limit.");
 			}
 			return {};
 		}
@@ -165,7 +165,7 @@ namespace arteststudio::infrastructure
 		{
 			if (!value.is_object())
 			{
-				return Failure(StorageError::InvalidData, L"Un punto JSON no es un objeto.");
+				return Failure(StorageError::InvalidData, L"A JSON point is not an object.");
 			}
 			StorageResult result = ReadInt(value, "x", point.x);
 			if (!result) return result;
@@ -173,7 +173,7 @@ namespace arteststudio::infrastructure
 			if (!result) return result;
 			if (!serialization::IsCoordinateValid(point.x) || !serialization::IsCoordinateValid(point.y))
 			{
-				return Failure(StorageError::InvalidData, L"Un punto JSON contiene coordenadas invalidas.");
+				return Failure(StorageError::InvalidData, L"A JSON point contains invalid coordinates.");
 			}
 			return {};
 		}
@@ -182,7 +182,7 @@ namespace arteststudio::infrastructure
 		{
 			if (!value.is_object())
 			{
-				return Failure(StorageError::InvalidData, L"Un extremo de conexion JSON no es un objeto.");
+				return Failure(StorageError::InvalidData, L"A JSON connection endpoint is not an object.");
 			}
 			StorageResult result = ReadUnsigned(value, "nodeId", endpoint.nodeId);
 			if (!result) return result;
@@ -269,14 +269,14 @@ namespace arteststudio::infrastructure
 		{
 			if (!root.is_object())
 			{
-				return Failure(StorageError::InvalidFormat, L"La raiz del documento JSON debe ser un objeto.");
+				return Failure(StorageError::InvalidFormat, L"The JSON document root must be an object.");
 			}
 
 			std::string format;
 			StorageResult result = ReadString(root, "format", format, 64);
 			if (!result || format != dto::kDiagramFormat)
 			{
-				return Failure(StorageError::InvalidFormat, L"El identificador de formato JSON no corresponde a ARTestStudio.Diagram.");
+				return Failure(StorageError::InvalidFormat, L"The JSON format identifier does not match ARTestStudio.Diagram.");
 			}
 
 			int version = 0;
@@ -284,19 +284,19 @@ namespace arteststudio::infrastructure
 			if (!result) return result;
 			if (version != dto::kJsonFormatVersion)
 			{
-				return Failure(StorageError::UnsupportedVersion, L"Version JSON encontrada: " + std::to_wstring(version));
+				return Failure(StorageError::UnsupportedVersion, L"Detected JSON version: " + std::to_wstring(version));
 			}
 
 			const auto nodes = root.find("nodes");
 			const auto connections = root.find("connections");
 			if (nodes == root.end() || !nodes->is_array() || connections == root.end() || !connections->is_array())
 			{
-				return Failure(StorageError::InvalidData, L"El JSON debe contener arreglos nodes y connections.");
+				return Failure(StorageError::InvalidData, L"The JSON must contain nodes and connections arrays.");
 			}
 			if (nodes->size() > serialization::kMaximumNodes ||
 				connections->size() > serialization::kMaximumConnections)
 			{
-				return Failure(StorageError::DataLimitExceeded, L"El JSON contiene demasiados elementos.");
+				return Failure(StorageError::DataLimitExceeded, L"The JSON contains too many elements.");
 			}
 
 			document.nodes.reserve(nodes->size());
@@ -304,7 +304,7 @@ namespace arteststudio::infrastructure
 			{
 				if (!value.is_object())
 				{
-					return Failure(StorageError::InvalidData, L"Un bloque JSON no es un objeto.");
+					return Failure(StorageError::InvalidData, L"A JSON node is not an object.");
 				}
 				NodeDto node;
 				result = ReadUnsigned(value, "id", node.id);
@@ -315,7 +315,7 @@ namespace arteststudio::infrastructure
 				const auto size = value.find("size");
 				if (position == value.end() || size == value.end() || !size->is_object())
 				{
-					return Failure(StorageError::InvalidData, L"Un bloque JSON no contiene position o size validos.");
+					return Failure(StorageError::InvalidData, L"A JSON node does not contain valid position and size objects.");
 				}
 				result = ReadPoint(*position, node.position);
 				if (!result) return result;
@@ -325,7 +325,7 @@ namespace arteststudio::infrastructure
 				if (!result) return result;
 				if (!serialization::IsDimensionValid(node.width) || !serialization::IsDimensionValid(node.height))
 				{
-					return Failure(StorageError::InvalidData, L"Un bloque JSON contiene dimensiones invalidas.");
+					return Failure(StorageError::InvalidData, L"A JSON node contains invalid dimensions.");
 				}
 				result = ReadString(value, "label", node.label, DiagramStorageLimits::MaximumLabelBytes);
 				if (!result) return result;
@@ -337,7 +337,7 @@ namespace arteststudio::infrastructure
 			{
 				if (!value.is_object())
 				{
-					return Failure(StorageError::InvalidData, L"Una conexion JSON no es un objeto.");
+					return Failure(StorageError::InvalidData, L"A JSON connection is not an object.");
 				}
 				ConnectionDto connection;
 				result = ReadUnsigned(value, "id", connection.id);
@@ -347,11 +347,11 @@ namespace arteststudio::infrastructure
 				const auto route = value.find("route");
 				if (from == value.end() || to == value.end() || route == value.end() || !route->is_array())
 				{
-					return Failure(StorageError::InvalidData, L"Una conexion JSON no contiene from, to o route validos.");
+					return Failure(StorageError::InvalidData, L"A JSON connection does not contain valid from, to, and route values.");
 				}
 				if (route->size() > serialization::kMaximumRoutePoints)
 				{
-					return Failure(StorageError::DataLimitExceeded, L"Una ruta JSON contiene demasiados puntos.");
+					return Failure(StorageError::DataLimitExceeded, L"A JSON route contains too many points.");
 				}
 				result = ReadEndpoint(*from, connection.from);
 				if (!result) return result;
@@ -380,7 +380,7 @@ namespace arteststudio::infrastructure
 				NodeKind kind;
 				if (!TryParseNodeKind(dtoNode.kind, kind))
 				{
-					return Failure(StorageError::InvalidData, L"Un bloque JSON contiene un kind desconocido.");
+					return Failure(StorageError::InvalidData, L"A JSON node contains an unknown kind value.");
 				}
 				std::wstring label;
 				const StorageResult conversion = serialization::FromUtf8(dtoNode.label, label);
@@ -398,7 +398,7 @@ namespace arteststudio::infrastructure
 				if (!TryParsePort(dtoConnection.from.port, fromPort) ||
 					!TryParsePort(dtoConnection.to.port, toPort))
 				{
-					return Failure(StorageError::InvalidData, L"Una conexion JSON contiene un puerto desconocido.");
+					return Failure(StorageError::InvalidData, L"A JSON connection contains an unknown port value.");
 				}
 				std::vector<Point> route;
 				route.reserve(dtoConnection.route.size());
@@ -437,17 +437,17 @@ namespace arteststudio::infrastructure
 			if (content.size() > DiagramStorageLimits::MaximumFileBytes)
 			{
 				content.clear();
-				return Failure(StorageError::FileTooLarge, L"El contenido JSON serializado excede 16 MB.");
+				return Failure(StorageError::FileTooLarge, L"The serialized JSON content exceeds 16 MB.");
 			}
 			return {};
 		}
 		catch (const std::bad_alloc&)
 		{
-			return Failure(StorageError::IoFailure, L"No hay memoria suficiente para generar el documento JSON.");
+			return Failure(StorageError::IoFailure, L"Insufficient memory to generate the JSON document.");
 		}
 		catch (...)
 		{
-			return Failure(StorageError::IoFailure, L"No se pudo generar el documento JSON.");
+			return Failure(StorageError::IoFailure, L"The JSON document could not be generated.");
 		}
 	}
 
@@ -463,7 +463,7 @@ namespace arteststudio::infrastructure
 			const json root = json::parse(content, nullptr, false);
 			if (root.is_discarded())
 			{
-				return Failure(StorageError::InvalidFormat, L"El contenido JSON esta truncado o tiene sintaxis invalida.");
+				return Failure(StorageError::InvalidFormat, L"The JSON content is truncated or syntactically invalid.");
 			}
 
 			DiagramDocumentDto document;
@@ -485,15 +485,15 @@ namespace arteststudio::infrastructure
 		}
 		catch (const nlohmann::json::exception&)
 		{
-			return Failure(StorageError::InvalidData, L"El JSON contiene un tipo o valor fuera de rango.");
+			return Failure(StorageError::InvalidData, L"The JSON contains an out-of-range type or value.");
 		}
 		catch (const std::bad_alloc&)
 		{
-			return Failure(StorageError::IoFailure, L"No hay memoria suficiente para cargar el documento JSON.");
+			return Failure(StorageError::IoFailure, L"Insufficient memory to load the JSON document.");
 		}
 		catch (...)
 		{
-			return Failure(StorageError::InvalidData, L"El documento JSON contiene datos no validos.");
+			return Failure(StorageError::InvalidData, L"The JSON document contains invalid data.");
 		}
 	}
 }

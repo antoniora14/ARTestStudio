@@ -6,9 +6,9 @@ set "BUILD_EXIT_CODE=%ERRORLEVEL%"
 
 echo.
 if not "%BUILD_EXIT_CODE%"=="0" (
-    echo La compilacion o las pruebas fallaron con codigo %BUILD_EXIT_CODE%.
+    echo The build or test suite failed with exit code %BUILD_EXIT_CODE%.
 ) else (
-    echo Compilacion y pruebas completadas correctamente.
+    echo Build and tests completed successfully.
 )
 
 echo.

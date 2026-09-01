@@ -53,10 +53,10 @@ void CViewTree::OnBeginDrag(NMHDR* pNMHDR, LRESULT* pResult)
     {
         CString strItemText = GetItemText(hItem);
 
-        // Prepara el COleDataSource para iniciar el arrastre
+        // Prepare the COleDataSource for the drag operation.
         COleDataSource dataSource;
 
-        // Usamos CF_UNICODETEXT para trabajar en Unicode
+        // Use CF_UNICODETEXT to preserve Unicode data.
         HGLOBAL hGlobal = GlobalAlloc(GMEM_MOVEABLE, (strItemText.GetLength() + 1) * sizeof(wchar_t));
         if (hGlobal)
         {
@@ -66,9 +66,9 @@ void CViewTree::OnBeginDrag(NMHDR* pNMHDR, LRESULT* pResult)
                 wcscpy_s(pText, strItemText.GetLength() + 1, strItemText);
                 GlobalUnlock(hGlobal);
 
-                // Cacheamos los datos en el formato Unicode
+                // Cache the data in Unicode format.
                 dataSource.CacheGlobalData(CF_UNICODETEXT, hGlobal);
-                // Iniciamos la operación de drag & drop (solo copia en este ejemplo)
+                // Start the drag-and-drop operation (copy only in this example).
                 dataSource.DoDragDrop(DROPEFFECT_COPY| DROPEFFECT_MOVE);
             }
         }

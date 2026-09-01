@@ -1,96 +1,95 @@
-# Arquitectura de ARTestStudio
+# ARTestStudio Architecture
 
-## Capas actuales
+## Current layers
 
-La direccion de dependencias es de afuera hacia adentro:
+Dependencies point inward:
 
-1. **Domain** (`source/Domain`) contiene el modelo del diagrama, geometria y
-   enrutamiento. No depende de MFC ni del sistema de archivos.
-2. **Application** (`source/Application`) define casos de uso y contratos que la
-   aplicacion necesita. `IDiagramStorage` es el limite para guardar y cargar un
-   diagrama.
-3. **Infrastructure** (`source/Infrastructure`) implementa contratos externos.
-   `TextDiagramStorage` implementa persistencia de archivos sin exponer detalles
-   del formato al dominio o a MFC.
-4. **Presentation** (clases MFC en `source`) coordina interacciones del usuario.
-   `CARTestStudioDoc` solicita operaciones al contrato de almacenamiento y
-   presenta los errores, pero no analiza ni genera el formato del archivo.
+1. **Domain** (`source/Domain`) contains the diagram model, geometry, and
+   routing logic. It does not depend on MFC or the file system.
+2. **Application** (`source/Application`) defines use cases and the contracts
+   required by the application. `IDiagramStorage` is the boundary for saving
+   and loading a diagram.
+3. **Infrastructure** (`source/Infrastructure`) implements external contracts.
+   `TextDiagramStorage` provides file persistence without exposing format
+   details to the domain or MFC.
+4. **Presentation** (MFC classes under `source`) coordinates user interactions.
+   `CARTestStudioDoc` invokes the storage contract and presents errors, but does
+   not parse or generate the file format.
 
-Para agregar otra forma de almacenamiento, se implementa `IDiagramStorage` sin
-modificar `DiagramModel`.
+To add another storage mechanism, implement `IDiagramStorage` without modifying
+`DiagramModel`.
 
-## Persistencia de diagramas
+## Diagram persistence
 
-Los diagramas usan exclusivamente la extension `.atd` (**AR Test Diagram**) y
-un formato de texto UTF-8 con encabezado
-`ARTESTSTUDIO_DIAGRAM` y numero de version. La version inicial es `1`.
+Diagrams exclusively use the `.atd` extension (**AR Test Diagram**) and a UTF-8
+text format with the `ARTESTSTUDIO_DIAGRAM` header and a version number. The
+initial version is `1`.
 
-La extension `.atprj` queda reservada para el formato de proyecto que se
-implementara posteriormente. Un proyecto podra contener varios diagramas y sus
-configuraciones. El adaptador actual de diagramas rechaza `.atprj` para mantener
-separadas ambas responsabilidades.
+The `.atprj` extension is reserved for the project format to be implemented
+later. A project may contain multiple diagrams and their configurations. The
+current diagram adapter rejects `.atprj` to keep both responsibilities separate.
 
-La carga es transaccional: primero se valida y reconstruye un modelo temporal.
-El documento activo solo se reemplaza cuando todo el archivo es valido. Se
-rechazan versiones desconocidas, identificadores duplicados, conexiones a bloques
-inexistentes, puertos invalidos, dimensiones fuera de rango y archivos truncados.
+Loading is transactional: a temporary model is validated and reconstructed
+first. The active document is replaced only after the entire file is valid.
+Unknown versions, duplicate identifiers, connections to missing nodes, invalid
+ports, out-of-range dimensions, and truncated files are rejected.
 
-`DiagramSnapshot` es el contrato para reconstruir el agregado completo. Conserva
-los `NodeId` y `ConnectionId` originales, valida todas las referencias antes de
-modificar el modelo y calcula los siguientes identificadores a partir del maximo
-restaurado. Esto permite que configuraciones y proyectos futuros mantengan
-referencias estables incluso cuando existen huecos por elementos eliminados.
+`DiagramSnapshot` is the contract used to reconstruct the complete aggregate.
+It preserves the original `NodeId` and `ConnectionId` values, validates every
+reference before modifying the model, and calculates the next identifiers from
+the highest restored values. This allows future configurations and projects to
+retain stable references even when deleted elements leave gaps.
 
-El guardado tambien es transaccional: se genera y escribe un archivo temporal en
-el mismo directorio y Windows reemplaza el destino al completar correctamente la
-escritura. Un fallo no debe dejar un documento parcialmente escrito.
+Saving is also transactional: a temporary file is generated and written in the
+same directory, and Windows replaces the destination after the write completes
+successfully. A failure must not leave a partially written document.
 
-`IAtomicFileWriter` separa la politica de persistencia del mecanismo de reemplazo.
-`WindowsAtomicFileWriter` limpia temporales `.tmp` obsoletos, fuerza la escritura
-del temporal a disco y solo entonces reemplaza el destino. El contrato podra
-reutilizarse en el futuro formato `.atprj` y permite simular fallos de escritura
-sin depender del sistema de archivos.
+`IAtomicFileWriter` separates persistence policy from the replacement mechanism.
+`WindowsAtomicFileWriter` removes stale `.tmp` files, flushes the temporary file
+to disk, and only then replaces the destination. The contract can be reused by
+the future `.atprj` format and allows write failures to be simulated without
+depending on the file system.
 
-Los archivos `.atd` tienen un limite de 16 MB y cada etiqueta UTF-8 un limite de
-64 KB. El tamano total se verifica antes de analizar el contenido y tambien
-durante la serializacion. Las cadenas entre comillas se leen de forma acotada, de
-modo que un archivo hostil no puede forzar una asignacion proporcional a todo su
-contenido. Los fallos de temporal y de reemplazo se reportan por separado; si el
-reemplazo falla, el documento anterior permanece intacto.
+`.atd` files have a 16 MB limit, and each UTF-8 label has a 64 KB limit. Total
+size is checked before parsing and again during serialization. Quoted strings
+are read with explicit bounds so that a hostile file cannot force an allocation
+proportional to its full contents. Temporary-file and replacement failures are
+reported separately; if replacement fails, the previous document remains
+intact.
 
-## Manejo de fallos
+## Fault handling
 
-Las operaciones esperadas no lanzan excepciones a la interfaz. Devuelven
-`StorageResult`, que contiene un `StorageError` estable y un detalle opcional. El
-adaptador captura excepciones de memoria, biblioteca estandar y errores
-desconocidos en su frontera. La capa MFC transforma el resultado en un mensaje
-para el usuario y conserva el diagrama existente cuando una carga falla.
+Expected operations do not propagate exceptions to the UI. They return a
+`StorageResult` containing a stable `StorageError` and optional diagnostic
+details. The adapter catches allocation failures, standard-library exceptions,
+and unknown exceptions at its boundary. The MFC layer converts the result into
+a user-facing message and preserves the existing diagram when loading fails.
 
-Los fallos transversales se envian a `FaultService` mediante `IFaultReporter`.
-La aplicacion configura `FileFaultReporter` en su punto de composicion, por lo que
-el dominio no depende de MFC, Windows ni del sistema de logs. La frontera global
-del bucle MFC registra excepciones inesperadas y los errores de persistencia usan
-el mismo canal antes de mostrar un mensaje al usuario.
+Cross-cutting failures are sent to `FaultService` through `IFaultReporter`. The
+application configures `FileFaultReporter` at its composition root, so the
+domain does not depend on MFC, Windows, or the logging subsystem. The global MFC
+message-loop boundary records unexpected exceptions, while persistence errors
+use the same channel before a message is presented to the user.
 
-El log predeterminado se escribe en
-`%LOCALAPPDATA%\ARTestStudio\Logs\ARTestStudio.log` como UTF-8. Al alcanzar 2 MB,
-el archivo anterior se conserva como `ARTestStudio.previous.log`. Un fallo del
-propio reporter se absorbe para no ocultar ni agravar el error original.
+The default log is written as UTF-8 to
+`%LOCALAPPDATA%\ARTestStudio\Logs\ARTestStudio.log`. After it reaches 2 MB, the
+previous file is retained as `ARTestStudio.previous.log`. Failures inside the
+reporter itself are suppressed so they cannot mask or compound the original
+error.
 
-## Pruebas
+## Tests
 
-El proyecto `ARTestStudio.UnitTests` usa Google Test y prueba las capas sin abrir
-la interfaz MFC. Los casos se separan por responsabilidad en `tests/Domain`,
-`tests/Application` y `tests/Infrastructure`; los dobles y utilidades comunes
-permanecen en `tests/TestSupport`.
+The `ARTestStudio.UnitTests` project uses Google Test to test the layers without
+opening the MFC UI. Test cases are organized by responsibility under
+`tests/Domain`, `tests/Application`, and `tests/Infrastructure`; shared test
+doubles and utilities remain under `tests/TestSupport`.
 
-Las pruebas de persistencia cubren round-trip de datos y UTF-8, archivos
-corruptos, referencias inexistentes, versiones incompatibles y archivos no
-encontrados. Tambien verifican limites de archivo y etiqueta, documentos
-truncados, limpieza de temporales obsoletos y preservacion del archivo anterior
-cuando una escritura o reemplazo falla.
+Persistence tests cover data and UTF-8 round trips, corrupted files, missing
+references, incompatible versions, and missing files. They also verify file and
+label limits, truncated documents, stale temporary-file cleanup, and preservation
+of the previous file when writing or replacement fails.
 
-Google Test se obtiene mediante el manifiesto `vcpkg.json`, cuya linea base fija
-las versiones para que Visual Studio y la compilacion por script consuman la
-misma dependencia. El ejecutable emite XML nativo y el flujo de compilacion crea
-ademas un reporte HTML legible bajo `artifacts/test-results`.
+Google Test is obtained through `vcpkg.json`, whose baseline pins dependency
+versions so that Visual Studio and scripted builds consume the same dependency.
+The executable emits native XML, and the build workflow also creates a readable
+HTML report under `artifacts/test-results`.

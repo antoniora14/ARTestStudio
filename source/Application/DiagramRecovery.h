@@ -57,13 +57,13 @@ namespace arteststudio::application
 		switch (source)
 		{
 		case RecoverySource::PreviousVersion:
-			return L"ultima version valida";
+			return L"last valid version";
 		case RecoverySource::InterruptedSave:
-			return L"guardado interrumpido";
+			return L"interrupted save";
 		case RecoverySource::None:
 			break;
 		}
-		return L"origen desconocido";
+		return L"unknown source";
 	}
 
 	[[nodiscard]] constexpr std::wstring_view DescribeRecoveryReason(RecoveryReason reason) noexcept
@@ -71,14 +71,14 @@ namespace arteststudio::application
 		switch (reason)
 		{
 		case RecoveryReason::PrimaryMissing:
-			return L"el documento principal no existe";
+			return L"the primary document is missing";
 		case RecoveryReason::PrimaryInvalid:
-			return L"el documento principal no es valido";
+			return L"the primary document is invalid";
 		case RecoveryReason::CandidateNewer:
-			return L"la copia de recuperacion es mas reciente";
+			return L"the recovery copy is newer";
 		case RecoveryReason::None:
 			break;
 		}
-		return L"sin motivo de recuperacion";
+		return L"no recovery reason";
 	}
 }

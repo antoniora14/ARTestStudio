@@ -97,18 +97,18 @@ namespace arteststudio::infrastructure
 			int version = 0;
 			if (!(input >> token >> version) || token != kLegacyHeader)
 			{
-				return Failure(StorageError::InvalidFormat, L"Falta el encabezado ARTESTSTUDIO_DIAGRAM.");
+				return Failure(StorageError::InvalidFormat, L"The ARTESTSTUDIO_DIAGRAM header is missing.");
 			}
 			if (version != kLegacyFormatVersion)
 			{
-				return Failure(StorageError::UnsupportedVersion, L"Version encontrada: " + std::to_wstring(version));
+				return Failure(StorageError::UnsupportedVersion, L"Detected version: " + std::to_wstring(version));
 			}
 
 			std::uint64_t nodeCount = 0;
 			if (!(input >> token >> nodeCount) || token != "NODES" ||
 				nodeCount > serialization::kMaximumNodes)
 			{
-				return Failure(StorageError::InvalidData, L"La seccion NODES es invalida.");
+				return Failure(StorageError::InvalidData, L"The NODES section is invalid.");
 			}
 
 			DiagramSnapshot snapshot;
@@ -128,18 +128,18 @@ namespace arteststudio::infrastructure
 					!serialization::IsCoordinateValid(x) || !serialization::IsCoordinateValid(y) ||
 					!serialization::IsDimensionValid(width) || !serialization::IsDimensionValid(height))
 				{
-					return Failure(StorageError::InvalidData, L"Se encontro un bloque invalido.");
+					return Failure(StorageError::InvalidData, L"An invalid node was found.");
 				}
 
 				const QuotedReadResult labelRead = ReadBoundedQuotedString(
 					input, labelBytes, DiagramStorageLimits::MaximumLabelBytes);
 				if (labelRead == QuotedReadResult::LimitExceeded)
 				{
-					return Failure(StorageError::DataLimitExceeded, L"Una etiqueta excede el limite de 64 KB.");
+					return Failure(StorageError::DataLimitExceeded, L"A label exceeds the 64 KB limit.");
 				}
 				if (labelRead != QuotedReadResult::Success)
 				{
-					return Failure(StorageError::InvalidData, L"La etiqueta de un bloque esta truncada o es invalida.");
+					return Failure(StorageError::InvalidData, L"A node label is truncated or invalid.");
 				}
 
 				std::wstring label;
@@ -156,7 +156,7 @@ namespace arteststudio::infrastructure
 			if (!(input >> token >> connectionCount) || token != "CONNECTIONS" ||
 				connectionCount > serialization::kMaximumConnections)
 			{
-				return Failure(StorageError::InvalidData, L"La seccion CONNECTIONS es invalida.");
+				return Failure(StorageError::InvalidData, L"The CONNECTIONS section is invalid.");
 			}
 
 			snapshot.connections.reserve(static_cast<std::size_t>(connectionCount));
@@ -172,7 +172,7 @@ namespace arteststudio::infrastructure
 					token != "CONNECTION" || !serialization::IsPortValid(fromPort) ||
 					!serialization::IsPortValid(toPort) || pointCount > serialization::kMaximumRoutePoints)
 				{
-					return Failure(StorageError::InvalidData, L"Se encontro una conexion invalida.");
+					return Failure(StorageError::InvalidData, L"An invalid connection was found.");
 				}
 
 				std::vector<Point> points;
@@ -183,7 +183,7 @@ namespace arteststudio::infrastructure
 					if (!(input >> point.x >> point.y) || !serialization::IsCoordinateValid(point.x) ||
 						!serialization::IsCoordinateValid(point.y))
 					{
-						return Failure(StorageError::InvalidData, L"Una conexion contiene una ruta invalida.");
+						return Failure(StorageError::InvalidData, L"A connection contains an invalid route.");
 					}
 					points.push_back(point);
 				}
@@ -197,11 +197,11 @@ namespace arteststudio::infrastructure
 
 			if (!(input >> token) || token != "END")
 			{
-				return Failure(StorageError::InvalidData, L"El documento esta truncado o no contiene END.");
+				return Failure(StorageError::InvalidData, L"The document is truncated or does not contain END.");
 			}
 			if (input >> token)
 			{
-				return Failure(StorageError::InvalidData, L"El documento contiene datos inesperados despues de END.");
+				return Failure(StorageError::InvalidData, L"The document contains unexpected data after END.");
 			}
 
 			DiagramModel loaded;
@@ -216,11 +216,11 @@ namespace arteststudio::infrastructure
 		}
 		catch (const std::bad_alloc&)
 		{
-			return Failure(StorageError::IoFailure, L"No hay memoria suficiente para cargar el documento legacy.");
+			return Failure(StorageError::IoFailure, L"Insufficient memory to load the legacy document.");
 		}
 		catch (...)
 		{
-			return Failure(StorageError::InvalidData, L"El documento legacy contiene datos no validos.");
+			return Failure(StorageError::InvalidData, L"The legacy document contains invalid data.");
 		}
 	}
 }

@@ -110,7 +110,7 @@ namespace arteststudio::tests
 			++calls;
 			lastDestination = destination;
 			lastContentSize = content.size();
-			return {m_error, L"Fallo simulado por la prueba."};
+			return {m_error, L"Failure simulated by the test."};
 		}
 
 		mutable int calls = 0;
@@ -139,7 +139,7 @@ namespace arteststudio::tests
 			++calls;
 			if (destination == m_destination)
 			{
-				return {m_error, L"Fallo simulado al reemplazar el destino."};
+				return {m_error, L"Simulated failure while replacing the destination."};
 			}
 
 			try
@@ -147,18 +147,18 @@ namespace arteststudio::tests
 				std::ofstream output(destination, std::ios::binary | std::ios::trunc);
 				if (!output)
 				{
-					return {AtomicWriteError::TemporaryWriteFailure, L"No se pudo escribir el respaldo simulado."};
+					return {AtomicWriteError::TemporaryWriteFailure, L"The simulated backup could not be written."};
 				}
 				output.write(content.data(), static_cast<std::streamsize>(content.size()));
 				if (!output)
 				{
-					return {AtomicWriteError::TemporaryWriteFailure, L"El respaldo simulado quedo incompleto."};
+					return {AtomicWriteError::TemporaryWriteFailure, L"The simulated backup remained incomplete."};
 				}
 				return {};
 			}
 			catch (...)
 			{
-				return {AtomicWriteError::TemporaryWriteFailure, L"Fallo inesperado del escritor simulado."};
+				return {AtomicWriteError::TemporaryWriteFailure, L"Unexpected failure from the simulated writer."};
 			}
 		}
 

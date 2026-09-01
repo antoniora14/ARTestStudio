@@ -51,7 +51,7 @@ namespace
 	{
 		if (exception == nullptr)
 		{
-			return L"MFC no proporciono informacion de la excepcion.";
+			return L"MFC did not provide exception information.";
 		}
 
 		try
@@ -65,7 +65,7 @@ namespace
 		catch (...)
 		{
 		}
-		return L"Excepcion MFC sin detalle disponible.";
+		return L"MFC exception details are unavailable.";
 	}
 
 	[[nodiscard]] std::wstring GetStandardExceptionDetail(const std::exception& exception)
@@ -182,8 +182,8 @@ namespace
 					FaultSeverity::Warning,
 					FaultCategory::Storage,
 					L"RECOVERY_AUTOSAVE_FAILED",
-					L"Autoguardar sesion",
-					L"No se pudo crear la copia periodica de recuperacion.");
+					L"Autosave session",
+					L"The periodic recovery copy could not be created.");
 			}
 			return result;
 		}
@@ -251,8 +251,8 @@ namespace
 					FaultSeverity::Warning,
 					FaultCategory::Storage,
 					L"RECOVERY_AUTOSAVE_CATALOG_FAILED",
-					L"Catalogar autoguardado",
-					L"La copia periodica existe, pero no pudo registrarse para un reinicio manual.");
+					L"Catalog autosave",
+					L"The periodic copy exists but could not be registered for a manual restart.");
 				return;
 			}
 
@@ -271,8 +271,8 @@ namespace
 					FaultSeverity::Warning,
 					FaultCategory::Storage,
 					L"RECOVERY_AUTOSAVE_CATALOG_FAILED",
-					L"Catalogar autoguardado",
-					L"No se pudo conservar la identidad de la sesion para un reinicio manual.");
+					L"Catalog autosave",
+					L"The session identity could not be retained for a manual restart.");
 			}
 		}
 	};
@@ -282,8 +282,8 @@ namespace
 		try
 		{
 			AfxMessageBox(
-				L"ARTestStudio encontro un error inesperado y debe cerrar. "
-				L"El detalle fue registrado en el archivo de diagnostico.",
+				L"ARTestStudio encountered an unexpected error and must close. "
+				L"Diagnostic details were recorded in the log file.",
 				MB_OK | MB_ICONERROR);
 		}
 		catch (...)
@@ -363,8 +363,8 @@ BOOL CARTestStudioApp::InitInstance()
 			FaultSeverity::Critical,
 			FaultCategory::Application,
 			L"APP_OLE_INIT_FAILED",
-			L"Inicializacion de la aplicacion",
-			L"No se pudieron inicializar las bibliotecas OLE.");
+			L"Application initialization",
+			L"The OLE libraries could not be initialized.");
 		AfxMessageBox(IDP_OLE_INIT_FAILED);
 		return FALSE;
 	}
@@ -410,8 +410,8 @@ BOOL CARTestStudioApp::InitInstance()
 			FaultSeverity::Critical,
 			FaultCategory::Application,
 			L"APP_DOCUMENT_TEMPLATE_FAILED",
-			L"Inicializacion de la aplicacion",
-			L"No se pudo crear la plantilla de documentos.");
+			L"Application initialization",
+			L"The document template could not be created.");
 		return FALSE;
 	}
 	AddDocTemplate(pDocTemplate);
@@ -424,8 +424,8 @@ BOOL CARTestStudioApp::InitInstance()
 			FaultSeverity::Critical,
 			FaultCategory::Application,
 			L"APP_MAIN_FRAME_FAILED",
-			L"Inicializacion de la aplicacion",
-			L"No se pudo crear la ventana principal.");
+			L"Application initialization",
+			L"The main window could not be created.");
 		delete pMainFrame;
 		return FALSE;
 	}
@@ -465,8 +465,8 @@ BOOL CARTestStudioApp::InitInstance()
 					FaultSeverity::Information,
 					FaultCategory::Storage,
 					L"RECOVERY_UNEXPECTED_CLOSE_DETECTED",
-					L"Restaurar sesion",
-					L"Se detecto una sesion anterior finalizada sin un cierre normal.");
+					L"Restore session",
+					L"A previous session that ended without a normal shutdown was detected.");
 
 				restoredPersistentSession = RestartInstance() != FALSE;
 				recoveryHandler->SetRestartIdentifier(currentRestartIdentifier);
@@ -478,10 +478,10 @@ BOOL CARTestStudioApp::InitInstance()
 					restoredPersistentSession
 						? L"RECOVERY_UNEXPECTED_CLOSE_RESTARTED"
 						: L"RECOVERY_UNEXPECTED_CLOSE_FAILED",
-					L"Restaurar sesion",
+					L"Restore session",
 					restoredPersistentSession
-						? L"ARTestStudio proceso la sesion anterior durante el reinicio manual."
-						: L"No fue posible reconstruir la sesion anterior desde el catalogo de autoguardado.");
+						? L"ARTestStudio processed the previous session during the manual restart."
+						: L"The previous session could not be reconstructed from the autosave catalog.");
 			}
 		}
 		else if (disposition == PendingRecoveryDisposition::Invalid)
@@ -491,8 +491,8 @@ BOOL CARTestStudioApp::InitInstance()
 				FaultSeverity::Warning,
 				FaultCategory::Storage,
 				L"RECOVERY_AUTOSAVE_CATALOG_INVALID",
-				L"Restaurar sesion",
-				L"Se descarto un catalogo de autoguardado incompleto o invalido.");
+				L"Restore session",
+				L"An incomplete or invalid autosave catalog was discarded.");
 		}
 	}
 
@@ -502,8 +502,8 @@ BOOL CARTestStudioApp::InitInstance()
 			FaultSeverity::Information,
 			FaultCategory::Storage,
 			L"RECOVERY_UNEXPECTED_CLOSE_RESTARTED",
-			L"Restaurar sesion",
-			L"Windows Restart Manager reinicio ARTestStudio para restaurar documentos y autosaves.");
+			L"Restore session",
+			L"Windows Restart Manager restarted ARTestStudio to restore documents and autosaves.");
 	}
 
 
@@ -564,8 +564,8 @@ int CARTestStudioApp::Run()
 			FaultSeverity::Critical,
 			FaultCategory::Unexpected,
 			L"APP_UNHANDLED_MFC_EXCEPTION",
-			L"Bucle principal de la aplicacion",
-			L"Una excepcion MFC alcanzo la frontera global.",
+			L"Application message loop",
+			L"An MFC exception reached the global boundary.",
 			detail);
 		if (exception != nullptr)
 		{
@@ -581,8 +581,8 @@ int CARTestStudioApp::Run()
 			FaultSeverity::Critical,
 			FaultCategory::Unexpected,
 			L"APP_UNHANDLED_STANDARD_EXCEPTION",
-			L"Bucle principal de la aplicacion",
-			L"Una excepcion estandar alcanzo la frontera global.",
+			L"Application message loop",
+			L"A standard exception reached the global boundary.",
 			detail);
 		ShowUnexpectedFailure();
 		return EXIT_FAILURE;
@@ -593,8 +593,8 @@ int CARTestStudioApp::Run()
 			FaultSeverity::Critical,
 			FaultCategory::Unexpected,
 			L"APP_UNHANDLED_UNKNOWN_EXCEPTION",
-			L"Bucle principal de la aplicacion",
-			L"Una excepcion desconocida alcanzo la frontera global.");
+			L"Application message loop",
+			L"An unknown exception reached the global boundary.");
 		ShowUnexpectedFailure();
 		return EXIT_FAILURE;
 	}
@@ -602,10 +602,10 @@ int CARTestStudioApp::Run()
 
 LRESULT CARTestStudioApp::ProcessWndProcException(CException* exception, const MSG* message)
 {
-	std::wstring operation = L"Procesamiento de un mensaje de ventana";
+	std::wstring operation = L"Window message processing";
 	if (message != nullptr)
 	{
-		operation += L" (mensaje ";
+		operation += L" (message ";
 		operation += std::to_wstring(message->message);
 		operation += L")";
 	}
@@ -615,7 +615,7 @@ LRESULT CARTestStudioApp::ProcessWndProcException(CException* exception, const M
 		FaultCategory::UserInterface,
 		L"UI_MFC_MESSAGE_EXCEPTION",
 		operation,
-		L"MFC capturo una excepcion durante el procesamiento de la interfaz.",
+		L"MFC caught an exception while processing the user interface.",
 		GetMfcExceptionDetail(exception));
 	return CWinAppEx::ProcessWndProcException(exception, message);
 }

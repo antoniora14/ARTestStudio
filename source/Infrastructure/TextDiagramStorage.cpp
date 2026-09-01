@@ -69,7 +69,7 @@ namespace arteststudio::infrastructure
 			std::ifstream input(path, std::ios::binary);
 			if (!input)
 			{
-				return Failure(StorageError::AccessDenied, L"No se pudo abrir el archivo para lectura.");
+				return Failure(StorageError::AccessDenied, L"The file could not be opened for reading.");
 			}
 
 			content.resize(static_cast<std::size_t>(fileSize));
@@ -79,7 +79,7 @@ namespace arteststudio::infrastructure
 				if (!input || input.gcount() != static_cast<std::streamsize>(fileSize))
 				{
 					content.clear();
-					return Failure(StorageError::IoFailure, L"No se pudo leer el contenido completo del archivo.");
+					return Failure(StorageError::IoFailure, L"The complete file contents could not be read.");
 				}
 			}
 			return {};
@@ -102,7 +102,7 @@ namespace arteststudio::infrastructure
 			probe.exists = std::filesystem::exists(path, existsError);
 			if (existsError)
 			{
-				probe.result = Failure(StorageError::IoFailure, L"No se pudo comprobar la existencia del archivo.");
+				probe.result = Failure(StorageError::IoFailure, L"The file's existence could not be determined.");
 				return probe;
 			}
 			if (!probe.exists)
@@ -114,14 +114,14 @@ namespace arteststudio::infrastructure
 			const std::uintmax_t fileSize = std::filesystem::file_size(path, sizeError);
 			if (sizeError)
 			{
-				probe.result = Failure(StorageError::IoFailure, L"No se pudo determinar el tamano del archivo.");
+				probe.result = Failure(StorageError::IoFailure, L"The file size could not be determined.");
 				return probe;
 			}
 			if (fileSize > DiagramStorageLimits::MaximumFileBytes)
 			{
 				probe.result = Failure(
 					StorageError::FileTooLarge,
-					L"Tamano detectado: " + std::to_wstring(fileSize) + L" bytes.");
+					L"Detected size: " + std::to_wstring(fileSize) + L" bytes.");
 				return probe;
 			}
 
@@ -142,7 +142,7 @@ namespace arteststudio::infrastructure
 			{
 				probe.result = Failure(
 					StorageError::IoFailure,
-					L"No se pudo determinar la fecha de modificacion del archivo.");
+					L"The file modification timestamp could not be determined.");
 				return probe;
 			}
 
@@ -219,7 +219,7 @@ namespace arteststudio::infrastructure
 			}
 			if (!HasDiagramFileExtension(path))
 			{
-				return Failure(StorageError::UnsupportedFileExtension, L"Se esperaba un archivo con extension .atd.");
+				return Failure(StorageError::UnsupportedFileExtension, L"A file with the .atd extension was expected.");
 			}
 
 			FileProbe probe = ProbeFile(path);
@@ -232,11 +232,11 @@ namespace arteststudio::infrastructure
 		}
 		catch (const std::bad_alloc&)
 		{
-			return Failure(StorageError::IoFailure, L"No hay memoria suficiente para cargar el documento.");
+			return Failure(StorageError::IoFailure, L"Insufficient memory to load the document.");
 		}
 		catch (...)
 		{
-			return Failure(StorageError::IoFailure, L"Se produjo un error inesperado al cargar el documento.");
+			return Failure(StorageError::IoFailure, L"An unexpected error occurred while loading the document.");
 		}
 	}
 
@@ -252,7 +252,7 @@ namespace arteststudio::infrastructure
 			}
 			if (!HasDiagramFileExtension(path))
 			{
-				return Failure(StorageError::UnsupportedFileExtension, L"Se esperaba un archivo con extension .atd.");
+				return Failure(StorageError::UnsupportedFileExtension, L"A file with the .atd extension was expected.");
 			}
 
 			std::string content;
@@ -270,7 +270,7 @@ namespace arteststudio::infrastructure
 				if (!backup)
 				{
 					StorageResult result = backup;
-					result.detail = L"No se pudo conservar la ultima version valida. " + result.detail;
+					result.detail = L"The last valid version could not be retained. " + result.detail;
 					return result;
 				}
 			}
@@ -282,11 +282,11 @@ namespace arteststudio::infrastructure
 		}
 		catch (const std::bad_alloc&)
 		{
-			return Failure(StorageError::IoFailure, L"No hay memoria suficiente para guardar el documento.");
+			return Failure(StorageError::IoFailure, L"Insufficient memory to save the document.");
 		}
 		catch (...)
 		{
-			return Failure(StorageError::IoFailure, L"Se produjo un error inesperado al guardar el documento.");
+			return Failure(StorageError::IoFailure, L"An unexpected error occurred while saving the document.");
 		}
 	}
 
@@ -305,7 +305,7 @@ namespace arteststudio::infrastructure
 			{
 				inspection.result = Failure(
 					StorageError::UnsupportedFileExtension,
-					L"Se esperaba un archivo con extension .atd.");
+					L"A file with the .atd extension was expected.");
 				return inspection;
 			}
 
@@ -340,14 +340,14 @@ namespace arteststudio::infrastructure
 		{
 			inspection.result = Failure(
 				StorageError::IoFailure,
-				L"No hay memoria suficiente para inspeccionar la recuperacion.");
+				L"Insufficient memory to inspect recovery data.");
 			return inspection;
 		}
 		catch (...)
 		{
 			inspection.result = Failure(
 				StorageError::IoFailure,
-				L"Se produjo un error inesperado al inspeccionar la recuperacion.");
+				L"An unexpected error occurred while inspecting recovery data.");
 			return inspection;
 		}
 	}
@@ -362,7 +362,7 @@ namespace arteststudio::infrastructure
 			if (destination.empty() || destination.filename().empty() ||
 				!HasDiagramFileExtension(destination) || !candidate.available)
 			{
-				return Failure(StorageError::InvalidPath, L"El destino o candidato de recuperacion no es valido.");
+				return Failure(StorageError::InvalidPath, L"The recovery destination or candidate is invalid.");
 			}
 
 			const std::filesystem::path expectedPath =
@@ -373,14 +373,14 @@ namespace arteststudio::infrastructure
 						: std::filesystem::path{};
 			if (expectedPath.empty() || candidate.path != expectedPath)
 			{
-				return Failure(StorageError::InvalidPath, L"El candidato no pertenece al documento solicitado.");
+				return Failure(StorageError::InvalidPath, L"The candidate does not belong to the requested document.");
 			}
 
 			FileProbe recovered = ProbeFile(candidate.path);
 			if (!recovered.valid)
 			{
 				StorageResult result = recovered.result;
-				result.detail = L"La copia de recuperacion dejo de ser valida. " + result.detail;
+				result.detail = L"The recovery copy is no longer valid. " + result.detail;
 				return result;
 			}
 
@@ -391,7 +391,7 @@ namespace arteststudio::infrastructure
 				if (!durableCopy)
 				{
 					StorageResult result = durableCopy;
-					result.detail = L"No se pudo proteger el guardado interrumpido antes de recuperarlo. " + result.detail;
+					result.detail = L"The interrupted save could not be preserved before recovery. " + result.detail;
 					return result;
 				}
 			}
@@ -413,11 +413,11 @@ namespace arteststudio::infrastructure
 		}
 		catch (const std::bad_alloc&)
 		{
-			return Failure(StorageError::IoFailure, L"No hay memoria suficiente para recuperar el documento.");
+			return Failure(StorageError::IoFailure, L"Insufficient memory to recover the document.");
 		}
 		catch (...)
 		{
-			return Failure(StorageError::IoFailure, L"Se produjo un error inesperado al recuperar el documento.");
+			return Failure(StorageError::IoFailure, L"An unexpected error occurred while recovering the document.");
 		}
 	}
 

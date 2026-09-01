@@ -31,9 +31,9 @@ namespace arteststudio::tests
 	TEST(TextDiagramStorageTests, PersistsAndRestoresDiagram)
 	{
 		DiagramModel original;
-		const std::wstring sourceLabel = L"Fuente ñ \"encendida\" \\ ruta\nsiguiente";
+		const std::wstring sourceLabel = L"Source café \"enabled\" \\ path\nnext";
 		const NodeId source = original.AddNode(NodeKind::Rectangle, {10, 20}, 180, 90, sourceLabel);
-		const NodeId target = original.AddNode(NodeKind::Diamond, {420, 260}, 110, 80, L"Condición");
+		const NodeId target = original.AddNode(NodeKind::Diamond, {420, 260}, 110, 80, L"Café condition");
 		const AddConnectionResult connection = original.AddConnection(
 			{source, PortId::Right},
 			{target, PortId::Top},
@@ -60,7 +60,7 @@ namespace arteststudio::tests
 		VerifyTestCondition(restoredSource.label == sourceLabel,
 			"Unicode labels with JSON escapes and line breaks must round-trip.");
 		VerifyTestCondition(restoredTarget.kind == NodeKind::Diamond, "The target kind must be restored.");
-		VerifyTestCondition(restoredTarget.label == L"Condición", "Accented labels must round-trip.");
+		VerifyTestCondition(restoredTarget.label == L"Café condition", "Accented labels must round-trip.");
 
 		const Connection& restoredConnection = restored.Connections().front();
 		VerifyTestCondition(restoredConnection.from.nodeId == restoredSource.id,

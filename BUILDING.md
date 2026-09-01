@@ -1,53 +1,53 @@
-﻿# Compilar ARTestStudio
+# Building ARTestStudio
 
-## Requisitos
+## Prerequisites
 
-- Visual Studio Insiders 18 instalado por defecto en
+- Visual Studio Insiders 18 installed by default at
   `D:\Program Files\Microsoft Visual Studio\18\Insiders`.
-- Desarrollo para el escritorio con C++.
-- MFC para el toolset v145.
+- Desktop development with C++ workload.
+- MFC for the v145 toolset.
 - Windows 10 SDK.
-- Acceso a Internet durante la primera restauracion de Google Test mediante el
-  `vcpkg` incluido con Visual Studio.
+- Internet access during the first Google Test restore through the `vcpkg`
+  bundled with Visual Studio.
 
-## Desde PowerShell
+## From PowerShell
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
 ```
 
-El script compila `Debug|x64`, restaura Google Test si es necesario y ejecuta
-`ARTestStudio.UnitTests`. Los resultados XML y HTML se escriben en
-`artifacts/test-results/x64/Debug/`, que no forma parte del repositorio.
+The script builds `Debug|x64`, restores Google Test when required, and runs
+`ARTestStudio.UnitTests`. XML and HTML results are written to
+`artifacts/test-results/x64/Debug/`, which is excluded from the repository.
 
-La solución y el proyecto MFC se encuentran bajo `source/`; las pruebas permanecen
-separadas en `tests/`.
+The solution and MFC project are located under `source/`; tests remain separate
+under `tests/`.
 
-Para seleccionar otra configuración:
+To select another configuration:
 
 ```powershell
 .\scripts\build.ps1 -Configuration Release -Platform x64
 ```
 
-Si Visual Studio Insiders está instalado en otra ubicación:
+If Visual Studio Insiders is installed at another location:
 
 ```powershell
 .\scripts\build.ps1 -VisualStudioPath 'E:\Microsoft Visual Studio\18\Insiders'
 ```
 
-Para compilar sin ejecutar pruebas:
+To build without running tests:
 
 ```powershell
 .\scripts\build.ps1 -Configuration Debug -Platform x64 -SkipTests
 ```
 
-La guia completa para Test Explorer, filtros y reportes esta en
+The complete Test Explorer, filtering, and reporting guide is available in
 `TESTING.md`.
 
-## Política inicial de calidad
+## Initial quality policy
 
-- C++20 y modo de conformidad del compilador.
-- Nivel de advertencias `/W4`.
-- Fuentes compiladas como UTF-8.
-- Las advertencias aún no fallan la compilación; se convertirán gradualmente en
-  errores después de sanear el código heredado.
+- C++20 and compiler conformance mode.
+- `/W4` warning level.
+- Sources compiled as UTF-8.
+- Warnings do not fail the build yet; they will be promoted to errors
+  incrementally after the legacy code has been cleaned up.
